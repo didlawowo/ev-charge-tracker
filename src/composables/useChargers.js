@@ -237,9 +237,15 @@ export function useChargers(position, heading, destination) {
     }, 1000)
   }, { immediate: true })
 
-  // Watch destination changes
-  watch([position, destination], ([pos, dest]) => {
+  // Watch destination changes (only react to destination, not position)
+  let lastDestId = null
+  watch(destination, (dest) => {
+    const pos = position?.value
     if (!pos) return
+
+    const destId = dest ? `${dest.lat}-${dest.lng}` : null
+    if (destId === lastDestId) return
+    lastDestId = destId
 
     if (dest) {
       fetchRouteToDestination(pos, dest)

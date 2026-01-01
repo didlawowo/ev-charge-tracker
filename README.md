@@ -5,6 +5,7 @@ Application PWA pour trouver les bornes de recharge rapide (CCS) sur votre traje
 ## Fonctionnalités
 
 ### Recherche de bornes
+
 - Affichage des bornes de recharge sur une carte interactive (Leaflet + OpenStreetMap)
 - Filtrage par type de connecteur (CCS uniquement par défaut)
 - Filtrage par puissance minimale (50kW à 300kW)
@@ -12,12 +13,14 @@ Application PWA pour trouver les bornes de recharge rapide (CCS) sur votre traje
 - Affichage des tarifs et lien vers Chargemap
 
 ### Planification de trajet
+
 - Recherche de destination avec autocomplétion (Photon/OpenStreetMap)
 - Calcul d'itinéraire optimisé (OSRM)
 - Affichage des bornes le long du corridor (2km de chaque côté)
 - Filtrage "Sur ma route" pour n'afficher que les bornes pertinentes
 
 ### Calcul des arrêts de recharge
+
 - Deux sliders : autonomie restante et autonomie max de la voiture
 - Recharge à 80% (optimal pour bornes rapides DC)
 - Marge de sécurité de 10% (ne pas descendre sous 10%)
@@ -25,17 +28,20 @@ Application PWA pour trouver les bornes de recharge rapide (CCS) sur votre traje
 - Affichage des arrêts recommandés avec numérotation
 
 ### Mode hiver
+
 - Bouton pour basculer entre mode été (19 kWh/100km) et hiver (25 kWh/100km)
 - Réduction automatique de l'autonomie effective (-24% en hiver)
 - Recalcul des arrêts nécessaires
 
 ### Carte interactive
+
 - Position GPS en temps réel avec vitesse
 - Marqueurs verts pour les bornes disponibles
 - Marqueurs bleus (plus gros, animés) pour les arrêts recommandés
 - Tracé de l'itinéraire en vert
 
 ### Mode offline
+
 - PWA installable sur mobile
 - Cache des tuiles de carte (30 jours, 1000 tuiles)
 - Bouton "Offline" pour pré-télécharger les tuiles le long de la route
@@ -83,12 +89,12 @@ npm run build
 
 ## APIs utilisées
 
-| Service | Usage | Cache |
-|---------|-------|-------|
-| OpenChargeMap | Données des bornes | 5 min |
-| OpenStreetMap | Tuiles de carte | 30 jours |
-| OSRM | Calcul d'itinéraire | 1 heure |
-| Photon | Recherche d'adresses | 1 jour |
+| Service       | Usage                | Cache    |
+| ------------- | -------------------- | -------- |
+| OpenChargeMap | Données des bornes   | 5 min    |
+| OpenStreetMap | Tuiles de carte      | 30 jours |
+| OSRM          | Calcul d'itinéraire  | 1 heure  |
+| Photon        | Recherche d'adresses | 1 jour   |
 
 ## Licence
 

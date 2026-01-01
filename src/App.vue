@@ -153,14 +153,14 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .header {
@@ -207,8 +207,9 @@ body {
 
 .content {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
+  min-height: 300px;
 }
 
 .loading, .error {

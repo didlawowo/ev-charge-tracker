@@ -31,12 +31,31 @@ const chargerIcon = L.divIcon({
   iconAnchor: [16, 16]
 })
 
+const teslaIcon = L.divIcon({
+  className: 'tesla-marker',
+  html: '<div class="tesla-dot">⚡</div>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16]
+})
+
 const plannedStopIcon = L.divIcon({
   className: 'planned-stop-marker',
   html: '<div class="planned-stop-dot">⚡</div>',
   iconSize: [44, 44],
   iconAnchor: [22, 22]
 })
+
+const teslaPlanndStopIcon = L.divIcon({
+  className: 'tesla-planned-stop-marker',
+  html: '<div class="tesla-planned-stop-dot">⚡</div>',
+  iconSize: [44, 44],
+  iconAnchor: [22, 22]
+})
+
+const isTesla = (charger) => {
+  const operator = (charger.operator || '').toLowerCase()
+  return operator.includes('tesla') || operator.includes('supercharger')
+}
 
 const destinationIcon = L.divIcon({
   className: 'destination-marker',
@@ -127,7 +146,13 @@ watch([chargers, plannedStops], ([newChargers, stops]) => {
 
   newChargers.forEach(charger => {
     const isPlannedStop = plannedStopIds.has(charger.id)
-    const icon = isPlannedStop ? plannedStopIcon : chargerIcon
+    const tesla = isTesla(charger)
+    let icon
+    if (isPlannedStop) {
+      icon = tesla ? teslaPlanndStopIcon : plannedStopIcon
+    } else {
+      icon = tesla ? teslaIcon : chargerIcon
+    }
     const marker = L.marker([charger.lat, charger.lng], { icon, zIndexOffset: isPlannedStop ? 1000 : 0 })
 
     // N'afficher que les CCS
@@ -194,11 +219,13 @@ const centerOnUser = () => {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 400px;
 }
 
 .map {
   width: 100%;
   height: 100%;
+  min-height: 400px;
   background: var(--bg);
 }
 
@@ -279,6 +306,19 @@ const centerOnUser = () => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
+.tesla-marker .tesla-dot {
+  width: 32px;
+  height: 32px;
+  background: #e31937;
+  border: 2px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(227, 25, 55, 0.4);
+}
+
 .planned-stop-marker .planned-stop-dot {
   width: 44px;
   height: 44px;
@@ -296,6 +336,25 @@ const centerOnUser = () => {
 @keyframes pulse-blue {
   0%, 100% { box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5); }
   50% { box-shadow: 0 4px 20px rgba(59, 130, 246, 0.8); }
+}
+
+.tesla-planned-stop-marker .tesla-planned-stop-dot {
+  width: 44px;
+  height: 44px;
+  background: #e31937;
+  border: 3px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 4px 12px rgba(227, 25, 55, 0.5);
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 4px 12px rgba(227, 25, 55, 0.5); }
+  50% { box-shadow: 0 4px 20px rgba(227, 25, 55, 0.8); }
 }
 
 .destination-marker .destination-dot {
