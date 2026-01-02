@@ -1,21 +1,21 @@
 <script setup>
-import { ref, watch, inject } from 'vue'
+import { ref, watch } from 'vue'
 import { useTileCache } from '../composables/useTileCache'
 
 const { isCaching, cacheProgress, cacheRouteArea } = useTileCache()
 
 const props = defineProps({
-  destination: Object,
-  destinationQuery: String,
-  suggestions: Array,
-  isSearching: Boolean,
-  routeInfo: Object,
-  routeGeometry: Array,
-  autonomy: Number,
-  maxAutonomy: Number,
-  winterMode: Boolean,
-  winterFactor: Number,
-  plannedStops: Array
+  destination: { type: Object, default: null },
+  destinationQuery: { type: String, default: '' },
+  suggestions: { type: Array, default: () => [] },
+  isSearching: { type: Boolean, default: false },
+  routeInfo: { type: Object, default: null },
+  routeGeometry: { type: Array, default: null },
+  autonomy: { type: Number, default: 100 },
+  maxAutonomy: { type: Number, default: 400 },
+  winterMode: { type: Boolean, default: false },
+  winterFactor: { type: Number, default: 1 },
+  plannedStops: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'update:maxAutonomy', 'update:winterMode'])
@@ -92,12 +92,12 @@ const downloadMapForOffline = async () => {
       <input
         type="text"
         :value="inputValue"
-        @input="onInput"
         placeholder="Destination..."
         class="search-input"
-      />
+        @input="onInput"
+      >
       <button v-if="destination" class="clear-btn" @click="onClear">✕</button>
-      <div v-if="isSearching" class="search-spinner"></div>
+      <div v-if="isSearching" class="search-spinner" />
     </div>
 
     <div v-if="suggestions.length > 0" class="suggestions">
@@ -117,8 +117,8 @@ const downloadMapForOffline = async () => {
       <button
         class="offline-btn"
         :class="{ caching: isCaching }"
-        @click="downloadMapForOffline"
         :disabled="isCaching"
+        @click="downloadMapForOffline"
       >
         <span v-if="isCaching">{{ cacheProgress }}%</span>
         <span v-else>📥 Offline</span>
@@ -135,12 +135,12 @@ const downloadMapForOffline = async () => {
           <input
             type="range"
             :value="autonomy"
-            @input="onAutonomyChange"
             min="0"
             :max="maxAutonomy"
             step="10"
             class="slider"
-          />
+            @input="onAutonomyChange"
+          >
         </div>
         <div class="slider-group">
           <div class="slider-header">
@@ -150,12 +150,12 @@ const downloadMapForOffline = async () => {
           <input
             type="range"
             :value="maxAutonomy"
-            @input="onMaxAutonomyChange"
             min="0"
             max="400"
             step="10"
             class="slider secondary"
-          />
+            @input="onMaxAutonomyChange"
+          >
         </div>
       </div>
       <button

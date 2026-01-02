@@ -32,7 +32,7 @@ const getMaxPower = computed(() => {
   <div class="charger-card" :class="{ offline: !charger.isOperational }">
     <div class="card-header">
       <div class="distance">{{ formatDistance(charger.distance) }}</div>
-      <div class="power" v-if="getMaxPower">{{ getMaxPower }} kW</div>
+      <div v-if="getMaxPower" class="power">{{ getMaxPower }} kW</div>
       <div class="operator">{{ charger.operator }}</div>
     </div>
 
@@ -42,7 +42,7 @@ const getMaxPower = computed(() => {
     </div>
 
     <div class="card-footer">
-      <div class="connections" v-if="ccsConnections.length > 0">
+      <div v-if="ccsConnections.length > 0" class="connections">
         <span
           v-for="(conn, i) in ccsConnections.slice(0, 2)"
           :key="i"

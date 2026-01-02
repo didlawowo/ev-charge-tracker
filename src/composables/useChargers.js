@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { getRouteGeometry, isPointNearRoute } from './useRoute'
+import { isCCSConnection } from '../utils'
 
 export function useChargers(position, heading, destination) {
   const chargers = ref([])
@@ -35,15 +36,6 @@ export function useChargers(position, heading, destination) {
     return CONNECTION_TYPES[conn.ConnectionTypeID] || 'Inconnu'
   }
 
-  const isCCSConnection = (conn) => {
-    // Check by ID (33 = CCS Type 2, 32 = CCS Type 1)
-    if (conn.ConnectionTypeID === 33 || conn.ConnectionTypeID === 32) {
-      return true
-    }
-    // Fallback to title check
-    const type = getConnectionType(conn)
-    return type.toLowerCase().includes('ccs')
-  }
 
   const fetchChargersAlongRoute = async (routeCoords) => {
     if (!routeCoords || routeCoords.length === 0) return
@@ -209,7 +201,7 @@ export function useChargers(position, heading, destination) {
     // Filter by CCS only
     if (onlyCCS.value) {
       result = result.filter(c =>
-        c.connections.some(conn => conn.typeId === 33 || conn.typeId === 32 || conn.type.toLowerCase().includes('ccs'))
+        c.connections.some(conn => isCCSConnection(conn))
       )
     }
 

@@ -9,7 +9,7 @@ const loading = inject('loading')
 <template>
   <div class="list-view">
     <div v-if="loading && chargers.length === 0" class="loading-state">
-      <div class="spinner"></div>
+      <div class="spinner" />
       <p>Recherche des bornes...</p>
     </div>
 

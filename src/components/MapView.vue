@@ -2,6 +2,7 @@
 import { ref, inject, onMounted, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { isCCSConnection } from '../utils'
 
 const position = inject('position')
 const chargers = inject('chargers')
@@ -45,7 +46,7 @@ const plannedStopIcon = L.divIcon({
   iconAnchor: [22, 22]
 })
 
-const teslaPlanndStopIcon = L.divIcon({
+const teslaPlannedStopIcon = L.divIcon({
   className: 'tesla-planned-stop-marker',
   html: '<div class="tesla-planned-stop-dot">⚡</div>',
   iconSize: [44, 44],
@@ -131,9 +132,7 @@ watch(position, (pos) => {
 
 // Filtrer pour n'afficher que les connecteurs CCS
 const getCCSConnections = (connections) => {
-  return connections.filter(c =>
-    c.typeId === 33 || c.typeId === 32 || c.type.toLowerCase().includes('ccs')
-  )
+  return connections.filter(c => isCCSConnection(c))
 }
 
 watch([chargers, plannedStops], ([newChargers, stops]) => {
@@ -149,7 +148,7 @@ watch([chargers, plannedStops], ([newChargers, stops]) => {
     const tesla = isTesla(charger)
     let icon
     if (isPlannedStop) {
-      icon = tesla ? teslaPlanndStopIcon : plannedStopIcon
+      icon = tesla ? teslaPlannedStopIcon : plannedStopIcon
     } else {
       icon = tesla ? teslaIcon : chargerIcon
     }
@@ -198,17 +197,17 @@ const centerOnUser = () => {
 
 <template>
   <div class="map-container">
-    <div ref="mapContainer" class="map"></div>
+    <div ref="mapContainer" class="map" />
 
-    <button class="center-btn" @click="centerOnUser" title="Centrer sur ma position">
+    <button class="center-btn" title="Centrer sur ma position" @click="centerOnUser">
       ◎
     </button>
 
     <div v-if="loading" class="map-loading">
-      <div class="spinner-small"></div>
+      <div class="spinner-small" />
     </div>
 
-    <div class="charger-count" v-if="chargers.length > 0">
+    <div v-if="chargers.length > 0" class="charger-count">
       {{ chargers.length }} borne{{ chargers.length > 1 ? 's' : '' }}
     </div>
   </div>

@@ -11,9 +11,9 @@ const onlyOnRoute = inject('onlyOnRoute')
   <div class="filter-bar">
     <label class="filter-item">
       <input
-        type="checkbox"
         v-model="onlyCCS"
-      />
+        type="checkbox"
+      >
       <span>CCS</span>
     </label>
 
@@ -31,9 +31,9 @@ const onlyOnRoute = inject('onlyOnRoute')
 
     <label class="filter-item">
       <input
-        type="checkbox"
         v-model="onlyOnRoute"
-      />
+        type="checkbox"
+      >
       <span>Sur ma route</span>
     </label>
 
@@ -42,12 +42,12 @@ const onlyOnRoute = inject('onlyOnRoute')
       <input
         type="range"
         :value="searchRadius"
-        @input="e => searchRadius = parseInt(e.target.value)"
         min="5000"
         max="100000"
         step="5000"
         class="distance-slider"
-      />
+        @input="e => searchRadius = parseInt(e.target.value)"
+      >
       <span class="distance-value">{{ Math.round(searchRadius / 1000) }} km</span>
     </div>
   </div>

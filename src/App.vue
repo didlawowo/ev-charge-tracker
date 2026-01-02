@@ -46,9 +46,7 @@ const {
   maxAutonomy,
   winterMode,
   winterFactor,
-  plannedStops,
-  stopsNeeded,
-  isTripFeasible
+  plannedStops
 } = useTripPlanner(filteredChargers, routeGeometry, routeInfo)
 
 provide('position', position)
@@ -73,30 +71,30 @@ startTracking()
   <div class="app">
     <header class="header">
       <h1>⚡ EV Finder</h1>
-      <div class="status" v-if="position">
-        <span class="speed" v-if="speed > 0">{{ Math.round(speed * 3.6) }} km/h</span>
-        <span class="dot" :class="{ active: isTracking }"></span>
+      <div v-if="position" class="status">
+        <span v-if="speed > 0" class="speed">{{ Math.round(speed * 3.6) }} km/h</span>
+        <span class="dot" :class="{ active: isTracking }" />
       </div>
     </header>
 
     <DestinationSearch
       :destination="destination"
-      :destinationQuery="destinationQuery"
+      :destination-query="destinationQuery"
       :suggestions="suggestions"
-      :isSearching="isSearching"
-      :routeInfo="routeInfo"
-      :routeGeometry="routeGeometry"
+      :is-searching="isSearching"
+      :route-info="routeInfo"
+      :route-geometry="routeGeometry"
       :autonomy="autonomy"
-      :maxAutonomy="maxAutonomy"
-      :winterMode="winterMode"
-      :winterFactor="winterFactor"
-      :plannedStops="plannedStops"
+      :max-autonomy="maxAutonomy"
+      :winter-mode="winterMode"
+      :winter-factor="winterFactor"
+      :planned-stops="plannedStops"
       @search="searchDestination"
       @select="selectDestination"
       @clear="clearDestination"
       @update:autonomy="val => autonomy = val"
-      @update:maxAutonomy="val => maxAutonomy = val"
-      @update:winterMode="val => winterMode = val"
+      @update:max-autonomy="val => maxAutonomy = val"
+      @update:winter-mode="val => winterMode = val"
     />
 
     <FilterBar />
@@ -106,7 +104,7 @@ startTracking()
         {{ geoError }}
       </div>
       <div v-else-if="!position" class="loading">
-        <div class="spinner"></div>
+        <div class="spinner" />
         <p>Localisation en cours...</p>
       </div>
       <template v-else>
