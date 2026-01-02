@@ -8,6 +8,7 @@ import MapView from './components/MapView.vue'
 import ListView from './components/ListView.vue'
 import FilterBar from './components/FilterBar.vue'
 import DestinationSearch from './components/DestinationSearch.vue'
+import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
 
 const activeTab = ref('map')
 
@@ -127,6 +128,8 @@ startTracking()
         Liste
       </button>
     </nav>
+
+    <PwaInstallPrompt />
   </div>
 </template>
 
