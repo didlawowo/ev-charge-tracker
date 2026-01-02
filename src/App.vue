@@ -8,6 +8,7 @@ import MapView from './components/MapView.vue'
 import ListView from './components/ListView.vue'
 import FilterBar from './components/FilterBar.vue'
 import DestinationSearch from './components/DestinationSearch.vue'
+import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
 
 const activeTab = ref('map')
 
@@ -70,7 +71,7 @@ startTracking()
 <template>
   <div class="app">
     <header class="header">
-      <h1>⚡ EV Finder</h1>
+      <h1>⚡ EV Finder <span class="version">v0.1.0</span></h1>
       <div v-if="position" class="status">
         <span v-if="speed > 0" class="speed">{{ Math.round(speed * 3.6) }} km/h</span>
         <span class="dot" :class="{ active: isTracking }" />
@@ -127,6 +128,8 @@ startTracking()
         Liste
       </button>
     </nav>
+
+    <PwaInstallPrompt />
   </div>
 </template>
 
@@ -173,6 +176,13 @@ body {
 .header h1 {
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+.version {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  vertical-align: middle;
 }
 
 .status {
