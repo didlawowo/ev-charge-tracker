@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { getRouteGeometry, isPointNearRoute } from './useRoute'
-import { isCCSConnection } from '../utils'
+import { isCCSConnection, haversineDistance } from '../utils'
 
 export function useChargers(position, heading, destination) {
   const chargers = ref([])
@@ -37,7 +37,7 @@ export function useChargers(position, heading, destination) {
   }
 
 
-  const fetchChargersAlongRoute = async (routeCoords) => {
+  const fetchChargersAlongRoute = async (routeCoords, startPos) => {
     if (!routeCoords || routeCoords.length === 0) return
 
     loading.value = true
@@ -82,14 +82,21 @@ export function useChargers(position, heading, destination) {
 
         for (const c of data) {
           if (!allChargers.has(c.ID)) {
+            const chargerLat = c.AddressInfo?.Latitude
+            const chargerLng = c.AddressInfo?.Longitude
+            // Calculate distance from user's start position, not from sample point
+            const distanceFromUser = haversineDistance(
+              startPos.lat, startPos.lng,
+              chargerLat, chargerLng
+            )
             allChargers.set(c.ID, {
               id: c.ID,
               name: c.AddressInfo?.Title || 'Station sans nom',
               address: c.AddressInfo?.AddressLine1 || '',
               town: c.AddressInfo?.Town || '',
-              lat: c.AddressInfo?.Latitude,
-              lng: c.AddressInfo?.Longitude,
-              distance: c.AddressInfo?.Distance * 1000,
+              lat: chargerLat,
+              lng: chargerLng,
+              distance: distanceFromUser,
               numberOfPoints: c.NumberOfPoints || 0,
               connections: c.Connections?.map(conn => ({
                 type: getConnectionType(conn),
@@ -180,7 +187,7 @@ export function useChargers(position, heading, destination) {
         distance: route.distance,
         duration: route.duration
       }
-      await fetchChargersAlongRoute(route.coordinates)
+      await fetchChargersAlongRoute(route.coordinates, startPos)
     }
   }
 
