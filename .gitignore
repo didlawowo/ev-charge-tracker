@@ -27,3 +27,7 @@ dist-ssr
 .envrc
 .env
 .env.local
+
+# Claude context files (keep root CLAUDE.md only)
+**/CLAUDE.md
+!/CLAUDE.md
