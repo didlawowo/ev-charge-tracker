@@ -217,8 +217,10 @@ export function useChargers(position, heading, destination) {
   const filteredChargers = computed(() => {
     let result = chargers.value
 
-    // Filter by search radius
-    result = result.filter(c => c.distance <= searchRadius.value)
+    // Filter by search radius ONLY when no route (otherwise we want chargers along the whole route)
+    if (!routeGeometry.value) {
+      result = result.filter(c => c.distance <= searchRadius.value)
+    }
 
     // Filter by minimum power
     if (minPower.value > 0) {
@@ -235,10 +237,10 @@ export function useChargers(position, heading, destination) {
       )
     }
 
-    // Filter by route if enabled and we have a route
+    // Filter by route proximity if enabled and we have a route
     if (onlyOnRoute.value && routeGeometry.value) {
       result = result.filter(c =>
-        isPointNearRoute(c.lat, c.lng, routeGeometry.value, 2000)
+        isPointNearRoute(c.lat, c.lng, routeGeometry.value, searchRadius.value)
       )
     }
 

@@ -3,34 +3,32 @@ import { haversineDistance } from '../utils'
 const OSRM_API = 'https://router.project-osrm.org/route/v1/driving'
 
 export async function getRouteGeometry(startLat, startLng, endLat, endLng, options = {}) {
-  try {
-    const { avoidTolls = false } = options
-    let url = `${OSRM_API}/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&alternatives=true`
+  const { avoidTolls = false } = options
+  const baseUrl = `${OSRM_API}/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&alternatives=true`
 
-    if (avoidTolls) {
-      url += '&exclude=toll'
-    }
-
+  const fetchRoute = async (url) => {
     const response = await fetch(url)
-
-    if (!response.ok) {
-      return null
-    }
-
+    if (!response.ok) return null
     const data = await response.json()
-
-    if (data.code !== 'Ok' || !data.routes?.length) {
-      return null
-    }
-
-    // Retourne tous les itinéraires (principal + alternatives)
+    if (data.code !== 'Ok' || !data.routes?.length) return null
     return data.routes.map((route, index) => ({
       id: index,
       coordinates: route.geometry.coordinates,
-      distance: route.distance, // metres
-      duration: route.duration, // seconds
+      distance: route.distance,
+      duration: route.duration,
       isMain: index === 0
     }))
+  }
+
+  try {
+    // Essayer avec exclude=toll si demandé (ne fonctionne pas sur le serveur OSRM public)
+    if (avoidTolls) {
+      const result = await fetchRoute(`${baseUrl}&exclude=toll`)
+      if (result) return result
+      // Fallback sans exclude=toll si le serveur ne le supporte pas
+      console.warn('OSRM: exclude=toll non supporté, calcul sans évitement des péages')
+    }
+    return await fetchRoute(baseUrl)
   } catch {
     return null
   }

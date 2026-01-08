@@ -12,7 +12,7 @@ const props = defineProps({
   routeInfo: { type: Object, default: null },
   routeGeometry: { type: Array, default: null },
   autonomy: { type: Number, default: 100 },
-  maxAutonomy: { type: Number, default: 400 },
+  maxAutonomy: { type: Number, default: 470 },
   winterMode: { type: Boolean, default: false },
   winterFactor: { type: Number, default: 1 },
   plannedStops: { type: Array, default: () => [] },
@@ -61,12 +61,12 @@ const formatDistance = (meters) => {
 }
 
 const onAutonomyChange = (e) => {
-  const val = parseInt(e.target.value) || 100
-  emit('update:autonomy', val)
+  let val = parseInt(e.target.value) || 100
   // S'assurer que l'autonomie restante ne dépasse pas l'autonomie max
   if (val > props.maxAutonomy) {
-    emit('update:maxAutonomy', val)
+    val = props.maxAutonomy
   }
+  emit('update:autonomy', val)
 }
 
 const onMaxAutonomyChange = (e) => {
@@ -157,7 +157,7 @@ const downloadMapForOffline = async () => {
             type="range"
             :value="autonomy"
             min="0"
-            :max="maxAutonomy"
+            max="470"
             step="10"
             class="slider"
             @input="onAutonomyChange"
@@ -171,8 +171,8 @@ const downloadMapForOffline = async () => {
           <input
             type="range"
             :value="maxAutonomy"
-            min="0"
-            max="400"
+            min="100"
+            max="470"
             step="10"
             class="slider secondary"
             @input="onMaxAutonomyChange"
@@ -184,7 +184,7 @@ const downloadMapForOffline = async () => {
         :class="{ active: winterMode }"
         @click="onWinterModeToggle"
       >
-        <span class="winter-icon">❄️</span>
+        <span class="winter-icon">{{ winterMode ? '❄️' : '☀️' }}</span>
         <span class="winter-label">{{ winterMode ? 'Hiver' : 'Été' }}</span>
         <span v-if="winterMode" class="winter-factor">{{ Math.round(winterFactor * 100) }}%</span>
       </button>
@@ -193,7 +193,7 @@ const downloadMapForOffline = async () => {
         :class="{ active: avoidTolls }"
         @click="onAvoidTollsToggle"
       >
-        <span class="toll-icon">💰</span>
+        <span class="toll-icon">🛣️</span>
         <span class="toll-label">{{ avoidTolls ? 'Gratuit' : 'Péages' }}</span>
       </button>
     </div>
