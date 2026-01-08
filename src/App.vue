@@ -9,6 +9,7 @@ import ListView from './components/ListView.vue'
 import FilterBar from './components/FilterBar.vue'
 import DestinationSearch from './components/DestinationSearch.vue'
 import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
+import { version } from '../package.json'
 
 const activeTab = ref('map')
 
@@ -38,8 +39,12 @@ const {
   minPower,
   onlyCCS,
   onlyOnRoute,
+  avoidTolls,
   routeGeometry,
-  routeInfo
+  routeInfo,
+  alternativeRoutes,
+  selectedRouteIndex,
+  selectRoute
 } = useChargers(position, heading, destination)
 
 const {
@@ -47,13 +52,14 @@ const {
   maxAutonomy,
   winterMode,
   winterFactor,
-  plannedStops
+  plannedStops,
+  relevantChargers
 } = useTripPlanner(filteredChargers, routeGeometry, routeInfo)
 
 provide('position', position)
 provide('heading', heading)
 provide('speed', speed)
-provide('chargers', filteredChargers)
+provide('chargers', relevantChargers)
 provide('loading', loading)
 provide('searchRadius', searchRadius)
 provide('minPower', minPower)
@@ -64,6 +70,8 @@ provide('destination', destination)
 provide('autonomy', autonomy)
 provide('plannedStops', plannedStops)
 provide('winterMode', winterMode)
+provide('alternativeRoutes', alternativeRoutes)
+provide('selectedRouteIndex', selectedRouteIndex)
 
 startTracking()
 </script>
@@ -71,7 +79,7 @@ startTracking()
 <template>
   <div class="app">
     <header class="header">
-      <h1>⚡ EV Finder <span class="version">v0.1.0</span></h1>
+      <h1>⚡ EV Finder <span class="version">v{{ version }}</span></h1>
       <div v-if="position" class="status">
         <span v-if="speed > 0" class="speed">{{ Math.round(speed * 3.6) }} km/h</span>
         <span class="dot" :class="{ active: isTracking }" />
@@ -90,12 +98,17 @@ startTracking()
       :winter-mode="winterMode"
       :winter-factor="winterFactor"
       :planned-stops="plannedStops"
+      :avoid-tolls="avoidTolls"
+      :alternative-routes="alternativeRoutes"
+      :selected-route-index="selectedRouteIndex"
       @search="searchDestination"
       @select="selectDestination"
       @clear="clearDestination"
       @update:autonomy="val => autonomy = val"
       @update:max-autonomy="val => maxAutonomy = val"
       @update:winter-mode="val => winterMode = val"
+      @update:avoid-tolls="val => avoidTolls = val"
+      @select-route="selectRoute"
     />
 
     <FilterBar />

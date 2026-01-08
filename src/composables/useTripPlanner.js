@@ -3,10 +3,11 @@ import { haversineDistance } from '../utils'
 
 export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
   const autonomy = ref(100) // km - autonomie RESTANTE actuelle
-  const maxAutonomy = ref(400) // km - autonomie MAX de la voiture (100%)
+  const maxAutonomy = ref(470) // km - autonomie MAX de la voiture (100%)
   const winterMode = ref(false) // Mode hiver (consommation plus élevée)
   const chargeTarget = 0.80 // On recharge jusqu'à 80% (optimal sur borne rapide)
   const safetyMargin = 0.10 // 10% de marge de sécurité (on s'arrête à 10% restant)
+  const showChargersThreshold = 0.70 // Afficher les bornes à partir de 70% d'autonomie utilisée (30% restant)
 
   // Consommation en kWh/100km
   const normalConsumption = 19
@@ -140,6 +141,30 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
       totalDistance <= currentUsableRange.value
   })
 
+  // Bornes pertinentes : seulement celles au-delà de 70% d'autonomie utilisée
+  // Quand on est à 30% restant, on commence à voir les bornes
+  const relevantChargers = computed(() => {
+    // Sans itinéraire, on affiche toutes les bornes filtrées
+    if (!routeInfo?.value || !routeGeometry?.value || !filteredChargers?.value) {
+      return filteredChargers?.value || []
+    }
+
+    const routeCoords = routeGeometry.value
+    const chargers = filteredChargers.value
+
+    // Distance à partir de laquelle on affiche les bornes (70% de l'autonomie actuelle)
+    const showFromDistance = autonomy.value * showChargersThreshold * winterFactor.value
+
+    // Enrichir les bornes avec leur distance depuis le départ
+    const chargersWithRouteDistance = chargers.map(c => {
+      const distanceAlongRoute = getDistanceAlongRoute(c.lat, c.lng, routeCoords) / 1000
+      return { ...c, distanceAlongRoute }
+    }).filter(c => c.distanceAlongRoute < Infinity)
+
+    // Ne garder que les bornes au-delà du seuil (quand on aura 30% restant)
+    return chargersWithRouteDistance.filter(c => c.distanceAlongRoute >= showFromDistance)
+  })
+
   return {
     autonomy,
     maxAutonomy,
@@ -150,6 +175,7 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
     rangeAfterCharge,
     plannedStops,
     stopsNeeded,
-    isTripFeasible
+    isTripFeasible,
+    relevantChargers
   }
 }

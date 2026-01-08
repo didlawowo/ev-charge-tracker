@@ -12,13 +12,16 @@ const props = defineProps({
   routeInfo: { type: Object, default: null },
   routeGeometry: { type: Array, default: null },
   autonomy: { type: Number, default: 100 },
-  maxAutonomy: { type: Number, default: 400 },
+  maxAutonomy: { type: Number, default: 470 },
   winterMode: { type: Boolean, default: false },
   winterFactor: { type: Number, default: 1 },
-  plannedStops: { type: Array, default: () => [] }
+  plannedStops: { type: Array, default: () => [] },
+  avoidTolls: { type: Boolean, default: false },
+  alternativeRoutes: { type: Array, default: () => [] },
+  selectedRouteIndex: { type: Number, default: 0 }
 })
 
-const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'update:maxAutonomy', 'update:winterMode'])
+const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'update:maxAutonomy', 'update:winterMode', 'update:avoidTolls', 'selectRoute'])
 
 const inputValue = ref(props.destinationQuery || '')
 let debounceTimeout = null
@@ -58,12 +61,12 @@ const formatDistance = (meters) => {
 }
 
 const onAutonomyChange = (e) => {
-  const val = parseInt(e.target.value) || 100
-  emit('update:autonomy', val)
+  let val = parseInt(e.target.value) || 100
   // S'assurer que l'autonomie restante ne dépasse pas l'autonomie max
   if (val > props.maxAutonomy) {
-    emit('update:maxAutonomy', val)
+    val = props.maxAutonomy
   }
+  emit('update:autonomy', val)
 }
 
 const onMaxAutonomyChange = (e) => {
@@ -77,6 +80,10 @@ const onMaxAutonomyChange = (e) => {
 
 const onWinterModeToggle = () => {
   emit('update:winterMode', !props.winterMode)
+}
+
+const onAvoidTollsToggle = () => {
+  emit('update:avoidTolls', !props.avoidTolls)
 }
 
 const downloadMapForOffline = async () => {
@@ -125,6 +132,20 @@ const downloadMapForOffline = async () => {
       </button>
     </div>
 
+    <!-- Itinéraires alternatifs -->
+    <div v-if="alternativeRoutes.length > 1" class="alternative-routes">
+      <button
+        v-for="(route, index) in alternativeRoutes"
+        :key="route.id"
+        class="route-option"
+        :class="{ active: index === selectedRouteIndex }"
+        @click="emit('selectRoute', index)"
+      >
+        <span class="route-label">{{ index === 0 ? 'Principal' : `Alt ${index}` }}</span>
+        <span class="route-stats">{{ formatDistance(route.distance) }} · {{ formatDuration(route.duration) }}</span>
+      </button>
+    </div>
+
     <div class="autonomy-controls">
       <div class="autonomy-sliders">
         <div class="slider-group">
@@ -136,7 +157,7 @@ const downloadMapForOffline = async () => {
             type="range"
             :value="autonomy"
             min="0"
-            :max="maxAutonomy"
+            max="470"
             step="10"
             class="slider"
             @input="onAutonomyChange"
@@ -150,8 +171,8 @@ const downloadMapForOffline = async () => {
           <input
             type="range"
             :value="maxAutonomy"
-            min="0"
-            max="400"
+            min="100"
+            max="470"
             step="10"
             class="slider secondary"
             @input="onMaxAutonomyChange"
@@ -163,9 +184,17 @@ const downloadMapForOffline = async () => {
         :class="{ active: winterMode }"
         @click="onWinterModeToggle"
       >
-        <span class="winter-icon">❄️</span>
+        <span class="winter-icon">{{ winterMode ? '❄️' : '☀️' }}</span>
         <span class="winter-label">{{ winterMode ? 'Hiver' : 'Été' }}</span>
         <span v-if="winterMode" class="winter-factor">{{ Math.round(winterFactor * 100) }}%</span>
+      </button>
+      <button
+        class="toll-toggle"
+        :class="{ active: avoidTolls }"
+        @click="onAvoidTollsToggle"
+      >
+        <span class="toll-icon">🛣️</span>
+        <span class="toll-label">{{ avoidTolls ? 'Gratuit' : 'Péages' }}</span>
       </button>
     </div>
 
@@ -488,6 +517,84 @@ const downloadMapForOffline = async () => {
 }
 
 .winter-factor {
+  font-size: 0.65rem;
+  opacity: 0.8;
+}
+
+.toll-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 60px;
+}
+
+.toll-toggle:hover {
+  border-color: var(--primary);
+}
+
+.toll-toggle.active {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: white;
+}
+
+.toll-icon {
+  font-size: 1.2rem;
+}
+
+.toll-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.alternative-routes {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.route-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.route-option:hover {
+  border-color: var(--primary);
+}
+
+.route-option.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.route-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.route-stats {
   font-size: 0.65rem;
   opacity: 0.8;
 }

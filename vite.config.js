@@ -2,10 +2,12 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const isProd = process.env.NODE_ENV === 'production'
+
 export default defineConfig({
   plugins: [
     vue(),
-    VitePWA({
+    isProd && VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
@@ -20,28 +22,7 @@ export default defineConfig({
         scope: '/',
         lang: 'fr',
         categories: ['navigation', 'utilities', 'lifestyle'],
-        screenshots: [
-          {
-            src: 'screenshot-wide.png',
-            sizes: '1280x720',
-            type: 'image/png',
-            form_factor: 'wide',
-            label: 'Vue carte avec bornes de recharge'
-          },
-          {
-            src: 'screenshot-mobile.png',
-            sizes: '750x1334',
-            type: 'image/png',
-            form_factor: 'narrow',
-            label: 'Application sur mobile'
-          }
-        ],
         icons: [
-          {
-            src: 'pwa-64x64.png',
-            sizes: '64x64',
-            type: 'image/png'
-          },
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
@@ -126,5 +107,5 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ].filter(Boolean)
 })
