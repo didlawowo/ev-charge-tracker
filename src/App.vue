@@ -38,8 +38,12 @@ const {
   minPower,
   onlyCCS,
   onlyOnRoute,
+  avoidTolls,
   routeGeometry,
-  routeInfo
+  routeInfo,
+  alternativeRoutes,
+  selectedRouteIndex,
+  selectRoute
 } = useChargers(position, heading, destination)
 
 const {
@@ -64,6 +68,8 @@ provide('destination', destination)
 provide('autonomy', autonomy)
 provide('plannedStops', plannedStops)
 provide('winterMode', winterMode)
+provide('alternativeRoutes', alternativeRoutes)
+provide('selectedRouteIndex', selectedRouteIndex)
 
 startTracking()
 </script>
@@ -90,12 +96,17 @@ startTracking()
       :winter-mode="winterMode"
       :winter-factor="winterFactor"
       :planned-stops="plannedStops"
+      :avoid-tolls="avoidTolls"
+      :alternative-routes="alternativeRoutes"
+      :selected-route-index="selectedRouteIndex"
       @search="searchDestination"
       @select="selectDestination"
       @clear="clearDestination"
       @update:autonomy="val => autonomy = val"
       @update:max-autonomy="val => maxAutonomy = val"
       @update:winter-mode="val => winterMode = val"
+      @update:avoid-tolls="val => avoidTolls = val"
+      @select-route="selectRoute"
     />
 
     <FilterBar />

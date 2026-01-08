@@ -10,8 +10,11 @@ export function useChargers(position, heading, destination) {
   const onlyOnRoute = ref(true)
   const minPower = ref(200) // kW
   const onlyCCS = ref(true)
+  const avoidTolls = ref(false) // Éviter les péages
   const routeGeometry = ref(null)
   const routeInfo = ref(null)
+  const alternativeRoutes = ref([]) // Itinéraires alternatifs
+  const selectedRouteIndex = ref(0) // Index de l'itinéraire sélectionné
 
   const OPENCHARGE_API = 'https://api.openchargemap.io/v3/poi'
   const API_KEY = import.meta.env.VITE_OPENCHARGE_API_KEY
@@ -180,15 +183,35 @@ export function useChargers(position, heading, destination) {
   }
 
   const fetchRouteToDestination = async (startPos, dest) => {
-    const route = await getRouteGeometry(startPos.lat, startPos.lng, dest.lat, dest.lng)
-    if (route) {
-      routeGeometry.value = route.coordinates
+    const routes = await getRouteGeometry(startPos.lat, startPos.lng, dest.lat, dest.lng, {
+      avoidTolls: avoidTolls.value
+    })
+    if (routes && routes.length > 0) {
+      alternativeRoutes.value = routes
+      selectedRouteIndex.value = 0
+      const selected = routes[0]
+      routeGeometry.value = selected.coordinates
       routeInfo.value = {
-        distance: route.distance,
-        duration: route.duration
+        distance: selected.distance,
+        duration: selected.duration
       }
-      await fetchChargersAlongRoute(route.coordinates, startPos)
+      await fetchChargersAlongRoute(selected.coordinates, startPos)
     }
+  }
+
+  const selectRoute = async (index) => {
+    if (index < 0 || index >= alternativeRoutes.value.length) return
+    const pos = position?.value
+    if (!pos) return
+
+    selectedRouteIndex.value = index
+    const selected = alternativeRoutes.value[index]
+    routeGeometry.value = selected.coordinates
+    routeInfo.value = {
+      distance: selected.distance,
+      duration: selected.duration
+    }
+    await fetchChargersAlongRoute(selected.coordinates, pos)
   }
 
   const filteredChargers = computed(() => {
@@ -256,6 +279,15 @@ export function useChargers(position, heading, destination) {
     }
   })
 
+  // Recalculer l'itinéraire si on change l'option péages
+  watch(avoidTolls, () => {
+    const pos = position?.value
+    const dest = destination?.value
+    if (pos && dest) {
+      fetchRouteToDestination(pos, dest)
+    }
+  })
+
   const refreshChargers = () => {
     if (position.value) {
       if (destination?.value) {
@@ -275,8 +307,12 @@ export function useChargers(position, heading, destination) {
     minPower,
     onlyCCS,
     onlyOnRoute,
+    avoidTolls,
     routeGeometry,
     routeInfo,
+    alternativeRoutes,
+    selectedRouteIndex,
+    selectRoute,
     refreshChargers
   }
 }

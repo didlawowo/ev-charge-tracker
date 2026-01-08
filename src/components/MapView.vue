@@ -7,9 +7,10 @@ import { isCCSConnection } from '../utils'
 const position = inject('position')
 const chargers = inject('chargers')
 const loading = inject('loading')
-const routeGeometry = inject('routeGeometry')
 const destination = inject('destination')
 const plannedStops = inject('plannedStops')
+const alternativeRoutes = inject('alternativeRoutes', ref([]))
+const selectedRouteIndex = inject('selectedRouteIndex', ref(0))
 
 const mapContainer = ref(null)
 let map = null
@@ -82,16 +83,32 @@ onMounted(() => {
   routeLayer = L.layerGroup().addTo(map)
 })
 
-// Watch route changes
-watch(routeGeometry, (coords) => {
+// Watch route changes - affiche toutes les routes (alternatives en gris, sélectionnée en vert)
+watch([alternativeRoutes, selectedRouteIndex], ([routes, selectedIdx]) => {
   if (!map || !routeLayer) return
 
   routeLayer.clearLayers()
 
-  if (coords && coords.length > 0) {
-    // Convert [lng, lat] to [lat, lng] for Leaflet
-    const latLngs = coords.map(([lng, lat]) => [lat, lng])
+  if (!routes || routes.length === 0) return
 
+  // D'abord les routes alternatives (en dessous)
+  routes.forEach((route, index) => {
+    if (index === selectedIdx) return // On dessine la route principale après
+
+    const latLngs = route.coordinates.map(([lng, lat]) => [lat, lng])
+    const polyline = L.polyline(latLngs, {
+      color: '#64748b',
+      weight: 3,
+      opacity: 0.5,
+      dashArray: '10, 10'
+    })
+    routeLayer.addLayer(polyline)
+  })
+
+  // Ensuite la route sélectionnée (au-dessus)
+  const selected = routes[selectedIdx]
+  if (selected) {
+    const latLngs = selected.coordinates.map(([lng, lat]) => [lat, lng])
     const polyline = L.polyline(latLngs, {
       color: '#10b981',
       weight: 4,
