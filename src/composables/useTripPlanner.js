@@ -5,6 +5,7 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
   const autonomy = ref(100) // km - autonomie RESTANTE actuelle
   const maxAutonomy = ref(470) // km - autonomie MAX de la voiture (100%)
   const winterMode = ref(false) // Mode hiver (consommation plus élevée)
+  const roundTripMode = ref(false) // Mode aller-retour
   const chargeTarget = 0.80 // On recharge jusqu'à 80% (optimal sur borne rapide)
   const safetyMargin = 0.10 // 10% de marge de sécurité (on s'arrête à 10% restant)
   const showChargersThreshold = 0.70 // Afficher les bornes à partir de 70% d'autonomie utilisée (30% restant)
@@ -141,6 +142,68 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
       totalDistance <= currentUsableRange.value
   })
 
+  // Analyse du trajet aller-retour
+  const roundTripAnalysis = computed(() => {
+    if (!routeInfo?.value || !roundTripMode.value) {
+      return null
+    }
+
+    const oneWayDistance = routeInfo.value.distance / 1000 // km
+    const totalRoundTrip = oneWayDistance * 2
+    const currentRange = currentUsableRange.value
+    const maxRange = rangeAfterCharge.value
+
+    // Cas 1: Aller-retour possible sans recharge
+    if (totalRoundTrip <= currentRange) {
+      return {
+        feasible: true,
+        needsCharge: false,
+        message: 'Aller-retour possible sans recharge',
+        remainingAfterTrip: Math.round(currentRange - totalRoundTrip)
+      }
+    }
+
+    // Cas 2: Aller possible, mais besoin de recharger à destination pour le retour
+    if (oneWayDistance <= currentRange) {
+      const remainingAtDestination = currentRange - oneWayDistance
+      const neededForReturn = oneWayDistance
+
+      // Après recharge à 80% à destination, peut-on rentrer?
+      if (neededForReturn <= maxRange) {
+        const minChargeNeeded = Math.max(0, neededForReturn - remainingAtDestination)
+        return {
+          feasible: true,
+          needsCharge: true,
+          chargeLocation: 'destination',
+          message: `Recharge nécessaire à destination`,
+          minChargeNeeded: Math.round(minChargeNeeded),
+          remainingAtDestination: Math.round(remainingAtDestination)
+        }
+      }
+    }
+
+    // Cas 3: Trajet trop long même avec recharges
+    if (oneWayDistance > maxRange) {
+      return {
+        feasible: false,
+        needsCharge: true,
+        chargeLocation: 'route',
+        message: 'Arrêts de recharge nécessaires (voir planification)',
+        stopsNeeded: plannedStops.value.length
+      }
+    }
+
+    // Cas 4: Aller impossible avec autonomie actuelle
+    return {
+      feasible: false,
+      needsCharge: true,
+      chargeLocation: 'before',
+      message: `Autonomie insuffisante pour l'aller`,
+      currentRange: Math.round(currentRange),
+      needed: Math.round(oneWayDistance)
+    }
+  })
+
   // Bornes pertinentes : seulement celles au-delà de 70% d'autonomie utilisée
   // Quand on est à 30% restant, on commence à voir les bornes
   const relevantChargers = computed(() => {
@@ -169,6 +232,7 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
     autonomy,
     maxAutonomy,
     winterMode,
+    roundTripMode,
     winterFactor,
     safetyMargin,
     currentUsableRange,
@@ -176,6 +240,7 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
     plannedStops,
     stopsNeeded,
     isTripFeasible,
+    roundTripAnalysis,
     relevantChargers
   }
 }

@@ -8,7 +8,7 @@ export function useChargers(position, heading, destination) {
   const error = ref(null)
   const searchRadius = ref(50000) // metres (50 km par défaut)
   const onlyOnRoute = ref(true)
-  const minPower = ref(200) // kW
+  const minPower = ref(150) // kW
   const onlyCCS = ref(true)
   const avoidTolls = ref(false) // Éviter les péages
   const routeGeometry = ref(null)

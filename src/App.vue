@@ -51,8 +51,10 @@ const {
   autonomy,
   maxAutonomy,
   winterMode,
+  roundTripMode,
   winterFactor,
   plannedStops,
+  roundTripAnalysis,
   relevantChargers
 } = useTripPlanner(filteredChargers, routeGeometry, routeInfo)
 
@@ -96,6 +98,8 @@ startTracking()
       :autonomy="autonomy"
       :max-autonomy="maxAutonomy"
       :winter-mode="winterMode"
+      :round-trip-mode="roundTripMode"
+      :round-trip-analysis="roundTripAnalysis"
       :winter-factor="winterFactor"
       :planned-stops="plannedStops"
       :avoid-tolls="avoidTolls"
@@ -107,6 +111,7 @@ startTracking()
       @update:autonomy="val => autonomy = val"
       @update:max-autonomy="val => maxAutonomy = val"
       @update:winter-mode="val => winterMode = val"
+      @update:round-trip-mode="val => roundTripMode = val"
       @update:avoid-tolls="val => avoidTolls = val"
       @select-route="selectRoute"
     />
