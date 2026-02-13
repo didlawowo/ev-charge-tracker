@@ -14,6 +14,8 @@ const props = defineProps({
   autonomy: { type: Number, default: 100 },
   maxAutonomy: { type: Number, default: 470 },
   winterMode: { type: Boolean, default: false },
+  roundTripMode: { type: Boolean, default: false },
+  roundTripAnalysis: { type: Object, default: null },
   winterFactor: { type: Number, default: 1 },
   plannedStops: { type: Array, default: () => [] },
   avoidTolls: { type: Boolean, default: false },
@@ -21,7 +23,7 @@ const props = defineProps({
   selectedRouteIndex: { type: Number, default: 0 }
 })
 
-const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'update:maxAutonomy', 'update:winterMode', 'update:avoidTolls', 'selectRoute'])
+const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'update:maxAutonomy', 'update:winterMode', 'update:roundTripMode', 'update:avoidTolls', 'selectRoute'])
 
 const inputValue = ref(props.destinationQuery || '')
 let debounceTimeout = null
@@ -86,6 +88,10 @@ const onAvoidTollsToggle = () => {
   emit('update:avoidTolls', !props.avoidTolls)
 }
 
+const onRoundTripToggle = () => {
+  emit('update:roundTripMode', !props.roundTripMode)
+}
+
 const downloadMapForOffline = async () => {
   if (props.routeGeometry) {
     await cacheRouteArea(props.routeGeometry, 5)
@@ -119,8 +125,8 @@ const downloadMapForOffline = async () => {
     </div>
 
     <div v-if="routeInfo" class="route-info">
-      <span>{{ formatDistance(routeInfo.distance) }}</span>
-      <span>{{ formatDuration(routeInfo.duration) }}</span>
+      <span>{{ formatDistance(routeInfo.distance) }}{{ roundTripMode ? ' × 2' : '' }}</span>
+      <span>{{ formatDuration(roundTripMode ? routeInfo.duration * 2 : routeInfo.duration) }}</span>
       <button
         class="offline-btn"
         :class="{ caching: isCaching }"
@@ -130,6 +136,22 @@ const downloadMapForOffline = async () => {
         <span v-if="isCaching">{{ cacheProgress }}%</span>
         <span v-else>📥 Offline</span>
       </button>
+    </div>
+
+    <!-- Analyse aller-retour -->
+    <div v-if="roundTripAnalysis" class="roundtrip-analysis" :class="{ warning: roundTripAnalysis.needsCharge, success: !roundTripAnalysis.needsCharge }">
+      <span v-if="!roundTripAnalysis.needsCharge" class="analysis-icon">✅</span>
+      <span v-else-if="roundTripAnalysis.feasible" class="analysis-icon">⚡</span>
+      <span v-else class="analysis-icon">⚠️</span>
+      <div class="analysis-content">
+        <span class="analysis-message">{{ roundTripAnalysis.message }}</span>
+        <span v-if="roundTripAnalysis.remainingAfterTrip !== undefined" class="analysis-detail">
+          Restant après trajet : {{ roundTripAnalysis.remainingAfterTrip }} km
+        </span>
+        <span v-if="roundTripAnalysis.minChargeNeeded" class="analysis-detail">
+          Recharge min. : {{ roundTripAnalysis.minChargeNeeded }} km
+        </span>
+      </div>
     </div>
 
     <!-- Itinéraires alternatifs -->
@@ -195,6 +217,14 @@ const downloadMapForOffline = async () => {
       >
         <span class="toll-icon">🛣️</span>
         <span class="toll-label">{{ avoidTolls ? 'Gratuit' : 'Péages' }}</span>
+      </button>
+      <button
+        class="roundtrip-toggle"
+        :class="{ active: roundTripMode }"
+        @click="onRoundTripToggle"
+      >
+        <span class="roundtrip-icon">🔄</span>
+        <span class="roundtrip-label">{{ roundTripMode ? 'A/R' : 'Aller' }}</span>
       </button>
     </div>
 
@@ -553,6 +583,82 @@ const downloadMapForOffline = async () => {
 .toll-label {
   font-size: 0.7rem;
   font-weight: 500;
+}
+
+.roundtrip-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 60px;
+}
+
+.roundtrip-toggle:hover {
+  border-color: var(--primary);
+}
+
+.roundtrip-toggle.active {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+  color: white;
+}
+
+.roundtrip-icon {
+  font-size: 1.2rem;
+}
+
+.roundtrip-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.roundtrip-analysis {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.roundtrip-analysis.success {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.roundtrip-analysis.warning {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+.analysis-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.analysis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.analysis-message {
+  font-weight: 500;
+}
+
+.analysis-detail {
+  font-size: 0.75rem;
+  opacity: 0.85;
 }
 
 .alternative-routes {

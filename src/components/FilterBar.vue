@@ -24,7 +24,6 @@ const onlyOnRoute = inject('onlyOnRoute')
         <option :value="50">50+ kW</option>
         <option :value="100">100+ kW</option>
         <option :value="150">150+ kW</option>
-        <option :value="200">200+ kW</option>
         <option :value="300">300+ kW</option>
       </select>
     </div>
