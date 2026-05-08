@@ -109,8 +109,16 @@ const downloadMapForOffline = async () => {
         class="search-input"
         @input="onInput"
       >
-      <button v-if="destination" class="clear-btn" @click="onClear">✕</button>
-      <div v-if="isSearching" class="search-spinner" />
+      <button
+        v-if="destination"
+        type="button"
+        class="clear-btn"
+        aria-label="Effacer la destination"
+        @click="onClear"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+      <div v-if="isSearching" class="search-spinner" role="status" aria-label="Recherche en cours" />
     </div>
 
     <div v-if="suggestions.length > 0" class="suggestions">
@@ -128,13 +136,15 @@ const downloadMapForOffline = async () => {
       <span>{{ formatDistance(routeInfo.distance) }}{{ roundTripMode ? ' × 2' : '' }}</span>
       <span>{{ formatDuration(roundTripMode ? routeInfo.duration * 2 : routeInfo.duration) }}</span>
       <button
+        type="button"
         class="offline-btn"
         :class="{ caching: isCaching }"
         :disabled="isCaching"
+        :aria-label="isCaching ? `Téléchargement des tuiles en cours, ${cacheProgress}%` : 'Télécharger les tuiles de la carte pour usage hors-ligne'"
         @click="downloadMapForOffline"
       >
         <span v-if="isCaching">{{ cacheProgress }}%</span>
-        <span v-else>📥 Offline</span>
+        <span v-else><span aria-hidden="true">📥 </span>Offline</span>
       </button>
     </div>
 

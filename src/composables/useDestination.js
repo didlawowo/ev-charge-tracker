@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 
 // Photon API - optimisé pour l'autocomplete (basé sur OSM)
 const PHOTON_API = 'https://photon.komoot.io/api'
@@ -43,11 +43,18 @@ export function useDestination() {
     })
   }
 
+  let currentController = null
+
   const searchDestination = async (query) => {
     if (!query || query.length < 2) {
       suggestions.value = []
       return
     }
+
+    // Annule la requête précédente pour éviter les race conditions
+    if (currentController) currentController.abort()
+    currentController = new AbortController()
+    const controller = currentController
 
     isSearching.value = true
 
@@ -61,7 +68,7 @@ export function useDestination() {
         bbox: '-5.5,41.3,9.6,51.1' // Bounding box France
       })
 
-      const response = await fetch(`${PHOTON_API}?${params}`)
+      const response = await fetch(`${PHOTON_API}?${params}`, { signal: controller.signal })
 
       if (!response.ok) {
         throw new Error('Erreur de recherche')
@@ -84,12 +91,21 @@ export function useDestination() {
       // Dédupliquer et limiter à 5 résultats
       suggestions.value = deduplicateSuggestions(frenchPlaces).slice(0, 5)
     } catch (e) {
+      if (e.name === 'AbortError') return
       console.error('Erreur recherche destination:', e)
       suggestions.value = []
     } finally {
-      isSearching.value = false
+      // N'éteindre le spinner que si cette requête est la dernière
+      if (currentController === controller) {
+        isSearching.value = false
+        currentController = null
+      }
     }
   }
+
+  onUnmounted(() => {
+    if (currentController) currentController.abort()
+  })
 
   const selectDestination = (place) => {
     destination.value = {

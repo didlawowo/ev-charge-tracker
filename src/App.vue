@@ -18,6 +18,7 @@ const {
   heading,
   speed,
   error: geoError,
+  permissionDenied,
   isTracking,
   startTracking
 } = useGeolocation()
@@ -82,9 +83,14 @@ startTracking()
   <div class="app">
     <header class="header">
       <h1>⚡ EV Finder <span class="version">v{{ version }}</span></h1>
-      <div v-if="position" class="status">
+      <div v-if="position" class="status" aria-live="polite" aria-atomic="true">
         <span v-if="speed > 0" class="speed">{{ Math.round(speed * 3.6) }} km/h</span>
-        <span class="dot" :class="{ active: isTracking }" />
+        <span
+          class="dot"
+          :class="{ active: isTracking }"
+          role="status"
+          :aria-label="isTracking ? 'Suivi GPS actif' : 'Suivi GPS inactif'"
+        />
       </div>
     </header>
 
@@ -119,11 +125,20 @@ startTracking()
     <FilterBar />
 
     <main class="content">
-      <div v-if="geoError" class="error">
+      <div v-if="permissionDenied" class="permission-help" role="alert">
+        <h2>📍 Localisation désactivée</h2>
+        <p>{{ geoError }}</p>
+        <p class="permission-hint">
+          Active la géolocalisation dans les paramètres de ton navigateur, puis clique sur Réessayer.
+          Tu peux aussi saisir une destination ci-dessus pour planifier un trajet.
+        </p>
+        <button class="retry-btn" @click="startTracking">Réessayer</button>
+      </div>
+      <div v-else-if="geoError" class="error" role="alert" aria-live="assertive">
         {{ geoError }}
       </div>
-      <div v-else-if="!position" class="loading">
-        <div class="spinner" />
+      <div v-else-if="!position" class="loading" aria-live="polite">
+        <div class="spinner" aria-hidden="true" />
         <p>Localisation en cours...</p>
       </div>
       <template v-else>
@@ -132,14 +147,18 @@ startTracking()
       </template>
     </main>
 
-    <nav class="tabs">
+    <nav class="tabs" role="tablist" aria-label="Vue carte ou liste">
       <button
+        role="tab"
+        :aria-selected="activeTab === 'map'"
         :class="{ active: activeTab === 'map' }"
         @click="activeTab = 'map'"
       >
         Carte
       </button>
       <button
+        role="tab"
+        :aria-selected="activeTab === 'list'"
         :class="{ active: activeTab === 'list' }"
         @click="activeTab = 'list'"
       >
@@ -175,6 +194,32 @@ body {
   overflow-x: hidden;
 }
 
+/* a11y : indicateur de focus clavier visible et cohérent */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+select:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* a11y : respect des préférences de mouvement réduit */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -187,6 +232,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
+  padding-top: calc(12px + env(safe-area-inset-top));
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
 }
@@ -238,19 +284,51 @@ body {
   min-height: 300px;
 }
 
-.loading, .error {
+.loading, .error, .permission-help {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
   gap: 16px;
+  padding: 20px;
+  text-align: center;
 }
 
 .error {
   color: #ef4444;
-  padding: 20px;
-  text-align: center;
+}
+
+.permission-help h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.permission-help p {
+  color: var(--text);
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+.permission-help .permission-hint {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.retry-btn {
+  padding: 12px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.retry-btn:hover {
+  background: var(--primary-dark);
 }
 
 .spinner {

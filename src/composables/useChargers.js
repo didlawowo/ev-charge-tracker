@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { getRouteGeometry, isPointNearRoute } from './useRoute'
 import { isCCSConnection, haversineDistance } from '../utils'
 
@@ -15,6 +15,7 @@ export function useChargers(position, heading, destination) {
   const routeInfo = ref(null)
   const alternativeRoutes = ref([]) // Itinéraires alternatifs
   const selectedRouteIndex = ref(0) // Index de l'itinéraire sélectionné
+  const tollAvoidanceSupported = ref(null) // null=non demandé, true=supporté, false=fallback silencieux
 
   const OPENCHARGE_API = 'https://api.openchargemap.io/v3/poi'
   const API_KEY = import.meta.env.VITE_OPENCHARGE_API_KEY
@@ -183,9 +184,11 @@ export function useChargers(position, heading, destination) {
   }
 
   const fetchRouteToDestination = async (startPos, dest) => {
-    const routes = await getRouteGeometry(startPos.lat, startPos.lng, dest.lat, dest.lng, {
+    const result = await getRouteGeometry(startPos.lat, startPos.lng, dest.lat, dest.lng, {
       avoidTolls: avoidTolls.value
     })
+    tollAvoidanceSupported.value = result?.tollAvoidanceSupported ?? null
+    const routes = result?.routes
     if (routes && routes.length > 0) {
       alternativeRoutes.value = routes
       selectedRouteIndex.value = 0
@@ -254,12 +257,17 @@ export function useChargers(position, heading, destination) {
   let fetchTimeout = null
   watch(position, (newPos) => {
     if (!newPos || destination?.value) return
+    if (!Number.isFinite(newPos.lat) || !Number.isFinite(newPos.lng)) return
 
     clearTimeout(fetchTimeout)
     fetchTimeout = setTimeout(() => {
       fetchChargers(newPos.lat, newPos.lng)
     }, 1000)
   }, { immediate: true })
+
+  onUnmounted(() => {
+    if (fetchTimeout) clearTimeout(fetchTimeout)
+  })
 
   // Watch destination changes (only react to destination, not position)
   let lastDestId = null
@@ -314,6 +322,7 @@ export function useChargers(position, heading, destination) {
     routeInfo,
     alternativeRoutes,
     selectedRouteIndex,
+    tollAvoidanceSupported,
     selectRoute,
     refreshChargers
   }

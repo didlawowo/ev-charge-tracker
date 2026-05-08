@@ -113,6 +113,12 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
       // Prendre la borne la plus loin (optimise le nombre d'arrêts)
       const bestCharger = reachableChargers[reachableChargers.length - 1]
 
+      // Garde-fou : si la "meilleure" borne ne fait pas avancer
+      // (coordonnées dupliquées ou erreur de tri), on évite la boucle infinie.
+      if (bestCharger.distanceFromStart <= currentPosition) {
+        break
+      }
+
       stops.push({
         ...bestCharger,
         stopNumber: stops.length + 1,

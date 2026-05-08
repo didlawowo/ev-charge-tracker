@@ -5,6 +5,7 @@ export function useGeolocation() {
   const heading = ref(null)
   const speed = ref(0)
   const error = ref(null)
+  const permissionDenied = ref(false)
   const isTracking = ref(false)
 
   let watchId = null
@@ -16,6 +17,7 @@ export function useGeolocation() {
     }
 
     isTracking.value = true
+    permissionDenied.value = false
 
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -33,11 +35,13 @@ export function useGeolocation() {
         }
 
         error.value = null
+        permissionDenied.value = false
       },
       (err) => {
         switch (err.code) {
           case err.PERMISSION_DENIED:
             error.value = 'Accès à la localisation refusé. Activez la géolocalisation dans les paramètres.'
+            permissionDenied.value = true
             break
           case err.POSITION_UNAVAILABLE:
             error.value = 'Position non disponible'
@@ -75,6 +79,7 @@ export function useGeolocation() {
     heading,
     speed,
     error,
+    permissionDenied,
     isTracking,
     startTracking,
     stopTracking
