@@ -216,15 +216,22 @@ const centerOnUser = () => {
   <div class="map-container">
     <div ref="mapContainer" class="map" />
 
-    <button class="center-btn" title="Centrer sur ma position" @click="centerOnUser">
-      ◎
+    <button
+      class="center-btn"
+      type="button"
+      aria-label="Centrer la carte sur ma position"
+      title="Centrer sur ma position"
+      @click="centerOnUser"
+    >
+      <span aria-hidden="true">◎</span>
     </button>
 
-    <div v-if="loading" class="map-loading">
-      <div class="spinner-small" />
+    <div v-if="loading" class="map-loading" role="status" aria-live="polite">
+      <div class="spinner-small" aria-hidden="true" />
+      <span class="visually-hidden">Chargement des bornes…</span>
     </div>
 
-    <div v-if="chargers.length > 0" class="charger-count">
+    <div v-if="chargers.length > 0" class="charger-count" aria-live="polite" aria-atomic="true">
       {{ chargers.length }} borne{{ chargers.length > 1 ? 's' : '' }}
     </div>
   </div>
@@ -292,6 +299,18 @@ const centerOnUser = () => {
   border-radius: 20px;
   font-size: 0.875rem;
   font-weight: 500;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @keyframes spin {

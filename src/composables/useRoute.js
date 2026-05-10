@@ -24,11 +24,13 @@ export async function getRouteGeometry(startLat, startLng, endLat, endLng, optio
     // Essayer avec exclude=toll si demandé (ne fonctionne pas sur le serveur OSRM public)
     if (avoidTolls) {
       const result = await fetchRoute(`${baseUrl}&exclude=toll`)
-      if (result) return result
+      if (result) return { routes: result, tollAvoidanceSupported: true }
       // Fallback sans exclude=toll si le serveur ne le supporte pas
-      console.warn('OSRM: exclude=toll non supporté, calcul sans évitement des péages')
+      const fallback = await fetchRoute(baseUrl)
+      return fallback ? { routes: fallback, tollAvoidanceSupported: false } : null
     }
-    return await fetchRoute(baseUrl)
+    const routes = await fetchRoute(baseUrl)
+    return routes ? { routes, tollAvoidanceSupported: null } : null
   } catch {
     return null
   }
