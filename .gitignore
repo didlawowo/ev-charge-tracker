@@ -34,3 +34,6 @@ dist-ssr
 
 # Mise
 .mise.toml
+
+playwright-report/
+test-results/
