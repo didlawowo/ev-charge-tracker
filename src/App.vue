@@ -13,6 +13,13 @@ import { version } from '../package.json'
 
 const activeTab = ref('map')
 const optionsOpen = ref(false)
+const focusStop = ref(null)
+
+// Clic sur un arrêt recommandé : basculer sur la carte et la centrer sur la borne
+const onFocusStop = (stop) => {
+  activeTab.value = 'map'
+  focusStop.value = { ...stop } // nouvel objet à chaque clic pour re-déclencher le watch
+}
 
 const {
   position,
@@ -84,6 +91,7 @@ provide('roundTripMode', roundTripMode)
 provide('alternativeRoutes', alternativeRoutes)
 provide('selectedRouteIndex', selectedRouteIndex)
 provide('refreshChargers', refreshChargers)
+provide('focusStop', focusStop)
 
 startTracking()
 </script>
@@ -141,6 +149,7 @@ startTracking()
       @clear="clearDestination"
       @update:autonomy="val => autonomy = val"
       @select-route="selectRoute"
+      @focus-stop="onFocusStop"
     />
 
     <main class="content">

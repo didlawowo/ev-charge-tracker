@@ -229,13 +229,6 @@ const onMaxAutonomyBlur = (e) => {
   text-align: right;
   padding: 8px 26px 8px 10px;
   outline: none;
-  -moz-appearance: textfield;
-}
-
-.num-input::-webkit-outer-spin-button,
-.num-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
 
 .num-input:focus {

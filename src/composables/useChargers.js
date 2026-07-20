@@ -116,7 +116,7 @@ export function useChargers(position, heading, destination) {
               operator: c.OperatorInfo?.Title || 'Opérateur inconnu',
               isOperational: c.StatusType?.IsOperational !== false,
               usageCost: c.UsageCost || null,
-              chargemapUrl: `https://chargemap.com/map?lat=${c.AddressInfo?.Latitude}&lng=${c.AddressInfo?.Longitude}&zoom=18`
+              detailsUrl: `https://openchargemap.org/site/poi/details/${c.ID}`
             })
           }
         }

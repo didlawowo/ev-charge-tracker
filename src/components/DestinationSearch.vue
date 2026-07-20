@@ -19,7 +19,7 @@ const props = defineProps({
   selectedRouteIndex: { type: Number, default: 0 }
 })
 
-const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'selectRoute'])
+const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'selectRoute', 'focusStop'])
 
 const inputValue = ref(props.destinationQuery || '')
 let debounceTimeout = null
@@ -173,13 +173,29 @@ const onAutonomyBlur = (e) => {
           :key="stop.id"
           class="stop-item"
         >
-          <span class="stop-number">{{ stop.stopNumber }}</span>
-          <div class="stop-info">
-            <strong>{{ stop.name }}</strong>
-            <span class="stop-details">
-              {{ Math.round(stop.distanceFromStart) }} km · {{ stop.operator }}
-            </span>
-          </div>
+          <button
+            type="button"
+            class="stop-main"
+            :aria-label="`Voir ${stop.name} sur la carte`"
+            @click="emit('focusStop', stop)"
+          >
+            <span class="stop-number">{{ stop.stopNumber }}</span>
+            <div class="stop-info">
+              <strong>{{ stop.name }}</strong>
+              <span class="stop-details">
+                {{ Math.round(stop.distanceFromStart) }} km · {{ stop.operator }}
+              </span>
+            </div>
+            <span class="stop-locate" aria-hidden="true">📍</span>
+          </button>
+          <a
+            :href="stop.detailsUrl"
+            target="_blank"
+            rel="noopener"
+            class="stop-details-link"
+          >
+            Fiche ↗
+          </a>
         </div>
       </div>
     </div>
@@ -225,13 +241,6 @@ const onAutonomyBlur = (e) => {
   text-align: right;
   padding: 10px 26px 10px 10px;
   outline: none;
-  -moz-appearance: textfield;
-}
-
-.autonomy-input::-webkit-outer-spin-button,
-.autonomy-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
 
 .autonomy-input:focus {
@@ -372,13 +381,45 @@ const onAutonomyBlur = (e) => {
 .stop-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .stop-item:last-child {
   border-bottom: none;
+}
+
+.stop-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stop-locate {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.stop-details-link {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  border-radius: 4px;
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .stop-number {

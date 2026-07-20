@@ -11,12 +11,14 @@ const destination = inject('destination')
 const plannedStops = inject('plannedStops')
 const alternativeRoutes = inject('alternativeRoutes', ref([]))
 const selectedRouteIndex = inject('selectedRouteIndex', ref(0))
+const focusStop = inject('focusStop', ref(null))
 
 const mapContainer = ref(null)
 let map = null
 let userMarker = null
 let destinationMarker = null
 let chargersLayer = null
+let chargerMarkers = {}
 let routeLayer = null
 
 const userIcon = L.divIcon({
@@ -178,6 +180,7 @@ watch([chargers, plannedStops], ([newChargers, stops]) => {
   if (!map || !chargersLayer) return
 
   chargersLayer.clearLayers()
+  chargerMarkers = {}
 
   // IDs des arrêts planifiés
   const plannedStopIds = new Set((stops || []).map(s => s.id))
@@ -223,16 +226,25 @@ watch([chargers, plannedStops], ([newChargers, stops]) => {
           <a class="popup-btn google" href="${gUrl}" target="_blank" rel="noopener">Google Maps</a>
           <a class="popup-btn apple" href="${aUrl}" target="_blank" rel="noopener">Plans</a>
         </div>
-        <a href="${charger.chargemapUrl}" target="_blank" rel="noopener">
-          Voir sur Chargemap →
+        <a href="${charger.detailsUrl}" target="_blank" rel="noopener">
+          Voir la fiche ↗
         </a>
       </div>
     `
 
     marker.bindPopup(popupContent)
     chargersLayer.addLayer(marker)
+    chargerMarkers[charger.id] = marker
   })
 }, { immediate: true })
+
+// Recentrer + ouvrir la bulle quand on clique un arrêt recommandé dans la liste
+watch(focusStop, (stop) => {
+  if (!map || !stop) return
+  map.setView([stop.lat, stop.lng], 15)
+  const marker = chargerMarkers[stop.id]
+  if (marker) marker.openPopup()
+})
 
 const centerOnUser = () => {
   if (map && position.value) {

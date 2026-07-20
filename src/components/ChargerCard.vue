@@ -67,12 +67,12 @@ const getMaxPower = computed(() => {
         <a :href="googleUrl" target="_blank" rel="noopener" class="maps-link google">Maps</a>
         <a :href="appleUrl" target="_blank" rel="noopener" class="maps-link apple">Plans</a>
         <a
-          :href="charger.chargemapUrl"
+          :href="charger.detailsUrl"
           target="_blank"
           rel="noopener"
           class="chargemap-link"
         >
-          Chargemap →
+          Détails ↗
         </a>
       </div>
     </div>
