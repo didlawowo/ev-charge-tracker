@@ -1,6 +1,6 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { getRouteGeometry, isPointNearRoute } from './useRoute'
-import { isCCSConnection, haversineDistance } from '../utils'
+import { isCCSConnection, haversineDistance, isTeslaCharger } from '../utils'
 
 export function useChargers(position, heading, destination) {
   const chargers = ref([])
@@ -8,8 +8,9 @@ export function useChargers(position, heading, destination) {
   const error = ref(null)
   const searchRadius = ref(50000) // metres (50 km par défaut)
   const onlyOnRoute = ref(true)
-  const minPower = ref(150) // kW
+  const minPower = ref(100) // kW
   const onlyCCS = ref(true)
+  const excludeTesla = ref(false) // Exclure les Superchargeurs Tesla
   const avoidTolls = ref(false) // Éviter les péages
   const routeGeometry = ref(null)
   const routeInfo = ref(null)
@@ -19,6 +20,10 @@ export function useChargers(position, heading, destination) {
 
   const OPENCHARGE_API = 'https://api.openchargemap.io/v3/poi'
   const API_KEY = import.meta.env.VITE_OPENCHARGE_API_KEY
+
+  // Largeur du couloir "sur ma route" (indépendant du Rayon qui sert à la recherche
+  // circulaire sans destination). On ne garde que les bornes réellement sur le trajet.
+  const ROUTE_CORRIDOR_M = 5000 // 5 km de part et d'autre du tracé
 
   // Connection type IDs mapping (compact mode doesn't include titles)
   const CONNECTION_TYPES = {
@@ -240,10 +245,17 @@ export function useChargers(position, heading, destination) {
       )
     }
 
+    // Exclure les Superchargeurs Tesla si demandé
+    if (excludeTesla.value) {
+      result = result.filter(c => !isTeslaCharger(c))
+    }
+
     // Filter by route proximity if enabled and we have a route
+    // On utilise un couloir étroit fixe (pas le Rayon, trop large) pour ne garder
+    // que les bornes réellement sur le trajet sélectionné.
     if (onlyOnRoute.value && routeGeometry.value) {
       result = result.filter(c =>
-        isPointNearRoute(c.lat, c.lng, routeGeometry.value, searchRadius.value)
+        isPointNearRoute(c.lat, c.lng, routeGeometry.value, ROUTE_CORRIDOR_M)
       )
     }
 
@@ -282,9 +294,11 @@ export function useChargers(position, heading, destination) {
     if (dest) {
       fetchRouteToDestination(pos, dest)
     } else {
-      // Clear route when destination is cleared
+      // Clear route when destination is cleared (sinon les tracés restent affichés)
       routeGeometry.value = null
       routeInfo.value = null
+      alternativeRoutes.value = []
+      selectedRouteIndex.value = 0
       fetchChargers(pos.lat, pos.lng)
     }
   })
@@ -316,6 +330,7 @@ export function useChargers(position, heading, destination) {
     searchRadius,
     minPower,
     onlyCCS,
+    excludeTesla,
     onlyOnRoute,
     avoidTolls,
     routeGeometry,

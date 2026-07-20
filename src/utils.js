@@ -34,3 +34,39 @@ export function isCCSConnection(conn) {
   const type = conn.type || conn.ConnectionType?.Title || ''
   return type.toLowerCase().includes('ccs')
 }
+
+/**
+ * Détermine si une borne est un site Tesla (Supercharger).
+ * @param {{operator?:string}} charger
+ */
+export function isTeslaCharger(charger) {
+  const operator = (charger.operator || '').toLowerCase()
+  return operator.includes('tesla') || operator.includes('supercharger')
+}
+
+/**
+ * Construit une URL d'itinéraire Google Maps intégrant la borne au trajet.
+ * - Sans destination : itinéraire simple position → borne.
+ * - Avec destination : borne en point de passage (position → borne → destination).
+ * @param {{lat:number,lng:number}|null} origin - position de départ
+ * @param {{lat:number,lng:number}} charger - borne sélectionnée
+ * @param {{lat:number,lng:number}|null} dest - destination finale (optionnelle)
+ */
+export function googleMapsUrl(origin, charger, dest) {
+  const o = origin ? `${origin.lat},${origin.lng}` : ''
+  const finalDest = dest ? `${dest.lat},${dest.lng}` : `${charger.lat},${charger.lng}`
+  const wp = dest ? `&waypoints=${charger.lat},${charger.lng}` : ''
+  return `https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${finalDest}${wp}&travelmode=driving`
+}
+
+/**
+ * Construit une URL d'itinéraire Apple Plans vers la borne.
+ * Note : l'URL scheme Apple ne gère pas de point de passage intermédiaire fiable,
+ * on route donc position → borne (la destination finale n'est pas incluse).
+ * @param {{lat:number,lng:number}|null} origin - position de départ
+ * @param {{lat:number,lng:number}} charger - borne sélectionnée
+ */
+export function appleMapsUrl(origin, charger) {
+  const s = origin ? `saddr=${origin.lat},${origin.lng}&` : ''
+  return `https://maps.apple.com/?${s}daddr=${charger.lat},${charger.lng}&dirflg=d`
+}

@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, inject, ref } from 'vue'
+import { googleMapsUrl, appleMapsUrl } from '../utils'
 
 const props = defineProps({
   charger: {
@@ -7,6 +8,16 @@ const props = defineProps({
     required: true
   }
 })
+
+const position = inject('position', ref(null))
+const destination = inject('destination', ref(null))
+
+const googleUrl = computed(() =>
+  googleMapsUrl(position.value, props.charger, destination.value)
+)
+const appleUrl = computed(() =>
+  appleMapsUrl(position.value, props.charger)
+)
 
 const formatDistance = (meters) => {
   if (meters < 1000) {
@@ -52,14 +63,18 @@ const getMaxPower = computed(() => {
         </span>
       </div>
       <span v-if="charger.usageCost" class="price">{{ charger.usageCost }}</span>
-      <a
-        :href="charger.chargemapUrl"
-        target="_blank"
-        rel="noopener"
-        class="chargemap-link"
-      >
-        Chargemap →
-      </a>
+      <div class="card-actions">
+        <a :href="googleUrl" target="_blank" rel="noopener" class="maps-link google">Maps</a>
+        <a :href="appleUrl" target="_blank" rel="noopener" class="maps-link apple">Plans</a>
+        <a
+          :href="charger.chargemapUrl"
+          target="_blank"
+          rel="noopener"
+          class="chargemap-link"
+        >
+          Chargemap →
+        </a>
+      </div>
     </div>
   </div>
 </template>
@@ -149,8 +164,33 @@ const getMaxPower = computed(() => {
   text-overflow: ellipsis;
 }
 
-.chargemap-link {
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+}
+
+.maps-link {
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.maps-link.google {
+  background: rgba(66, 133, 244, 0.15);
+  color: #6ba1ff;
+}
+
+.maps-link.apple {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+}
+
+.chargemap-link {
   padding: 4px 8px;
   background: rgba(16, 185, 129, 0.15);
   border-radius: 4px;

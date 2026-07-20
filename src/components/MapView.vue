@@ -2,7 +2,7 @@
 import { ref, inject, onMounted, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { isCCSConnection } from '../utils'
+import { isCCSConnection, googleMapsUrl, appleMapsUrl } from '../utils'
 
 const position = inject('position')
 const chargers = inject('chargers')
@@ -81,6 +81,25 @@ onMounted(() => {
 
   chargersLayer = L.layerGroup().addTo(map)
   routeLayer = L.layerGroup().addTo(map)
+
+  // Si la position GPS est déjà connue au montage (course avec le watch immédiat),
+  // centrer dessus tout de suite — sinon on resterait bloqué sur la vue France.
+  if (position?.value) {
+    userMarker = L.marker([position.value.lat, position.value.lng], { icon: userIcon }).addTo(map)
+    map.setView([position.value.lat, position.value.lng], 13)
+  }
+
+  // Ajuste la taille des pastilles selon le zoom (petites quand on dézoome,
+  // pour ne pas masquer l'itinéraire). z<=6 → 0.4, z>=12 → 1 (linéaire entre).
+  const updateMarkerScale = () => {
+    const z = map.getZoom()
+    let scale = 1
+    if (z <= 6) scale = 0.4
+    else if (z < 12) scale = 0.4 + (z - 6) * (0.6 / 6)
+    mapContainer.value.style.setProperty('--marker-scale', scale.toFixed(2))
+  }
+  map.on('zoomend', updateMarkerScale)
+  updateMarkerScale()
 })
 
 // Watch route changes - affiche toutes les routes (alternatives en gris, sélectionnée en vert)
@@ -133,6 +152,9 @@ watch(destination, (dest) => {
 
   if (dest) {
     destinationMarker = L.marker([dest.lat, dest.lng], { icon: destinationIcon }).addTo(map)
+  } else if (position?.value) {
+    // Destination effacée : recentrer sur la position GPS d'origine
+    map.setView([position.value.lat, position.value.lng], 13)
   }
 }, { immediate: true })
 
@@ -183,6 +205,9 @@ watch([chargers, plannedStops], ([newChargers, stops]) => {
       ? `<p class="price">${charger.usageCost}</p>`
       : ''
 
+    const gUrl = googleMapsUrl(position.value, charger, destination.value)
+    const aUrl = appleMapsUrl(position.value, charger)
+
     const popupContent = `
       <div class="popup">
         <strong>${charger.name}</strong>
@@ -194,6 +219,10 @@ watch([chargers, plannedStops], ([newChargers, stops]) => {
         </div>
         <div class="connections">${connectionsHtml}</div>
         ${priceHtml}
+        <div class="popup-actions">
+          <a class="popup-btn google" href="${gUrl}" target="_blank" rel="noopener">Google Maps</a>
+          <a class="popup-btn apple" href="${aUrl}" target="_blank" rel="noopener">Plans</a>
+        </div>
         <a href="${charger.chargemapUrl}" target="_blank" rel="noopener">
           Voir sur Chargemap →
         </a>
@@ -339,19 +368,25 @@ const centerOnUser = () => {
   justify-content: center;
   font-size: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transform: scale(var(--marker-scale, 1));
+  transform-origin: center;
+  transition: transform 0.15s ease;
 }
 
 .tesla-marker .tesla-dot {
   width: 32px;
   height: 32px;
-  background: #e31937;
+  background: #475569;
   border: 2px solid white;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  box-shadow: 0 2px 8px rgba(227, 25, 55, 0.4);
+  box-shadow: 0 2px 8px rgba(71, 85, 105, 0.4);
+  transform: scale(var(--marker-scale, 1));
+  transform-origin: center;
+  transition: transform 0.15s ease;
 }
 
 .planned-stop-marker .planned-stop-dot {
@@ -366,6 +401,9 @@ const centerOnUser = () => {
   font-size: 22px;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
   animation: pulse-blue 2s infinite;
+  transform: scale(var(--marker-scale, 1));
+  transform-origin: center;
+  transition: transform 0.15s ease;
 }
 
 @keyframes pulse-blue {
@@ -376,20 +414,23 @@ const centerOnUser = () => {
 .tesla-planned-stop-marker .tesla-planned-stop-dot {
   width: 44px;
   height: 44px;
-  background: #e31937;
+  background: #475569;
   border: 3px solid white;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
-  box-shadow: 0 4px 12px rgba(227, 25, 55, 0.5);
-  animation: pulse-red 2s infinite;
+  box-shadow: 0 4px 12px rgba(71, 85, 105, 0.5);
+  animation: pulse-slate 2s infinite;
+  transform: scale(var(--marker-scale, 1));
+  transform-origin: center;
+  transition: transform 0.15s ease;
 }
 
-@keyframes pulse-red {
-  0%, 100% { box-shadow: 0 4px 12px rgba(227, 25, 55, 0.5); }
-  50% { box-shadow: 0 4px 20px rgba(227, 25, 55, 0.8); }
+@keyframes pulse-slate {
+  0%, 100% { box-shadow: 0 4px 12px rgba(71, 85, 105, 0.5); }
+  50% { box-shadow: 0 4px 20px rgba(71, 85, 105, 0.85); }
 }
 
 .destination-marker .destination-dot {
@@ -463,5 +504,29 @@ const centerOnUser = () => {
   color: #f59e0b;
   font-size: 0.8rem;
   margin-top: 6px;
+}
+
+.leaflet-popup-content .popup .popup-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.leaflet-popup-content .popup .popup-actions .popup-btn {
+  margin-top: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.leaflet-popup-content .popup .popup-actions .popup-btn.google {
+  background: rgba(66, 133, 244, 0.15);
+  color: #4285f4;
+}
+
+.leaflet-popup-content .popup .popup-actions .popup-btn.apple {
+  background: rgba(100, 116, 139, 0.18);
+  color: #475569;
 }
 </style>
