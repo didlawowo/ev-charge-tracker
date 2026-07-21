@@ -6,12 +6,20 @@ import { useDestination } from './composables/useDestination'
 import { useTripPlanner } from './composables/useTripPlanner'
 import MapView from './components/MapView.vue'
 import ListView from './components/ListView.vue'
-import FilterBar from './components/FilterBar.vue'
+import OptionsMenu from './components/OptionsMenu.vue'
 import DestinationSearch from './components/DestinationSearch.vue'
 import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
 import { version } from '../package.json'
 
 const activeTab = ref('map')
+const optionsOpen = ref(false)
+const focusStop = ref(null)
+
+// Clic sur un arrêt recommandé : basculer sur la carte et la centrer sur la borne
+const onFocusStop = (stop) => {
+  activeTab.value = 'map'
+  focusStop.value = { ...stop } // nouvel objet à chaque clic pour re-déclencher le watch
+}
 
 const {
   position,
@@ -39,13 +47,15 @@ const {
   searchRadius,
   minPower,
   onlyCCS,
+  excludeTesla,
   onlyOnRoute,
   avoidTolls,
   routeGeometry,
   routeInfo,
   alternativeRoutes,
   selectedRouteIndex,
-  selectRoute
+  selectRoute,
+  refreshChargers
 } = useChargers(position, heading, destination)
 
 const {
@@ -67,14 +77,21 @@ provide('loading', loading)
 provide('searchRadius', searchRadius)
 provide('minPower', minPower)
 provide('onlyCCS', onlyCCS)
+provide('excludeTesla', excludeTesla)
 provide('onlyOnRoute', onlyOnRoute)
 provide('routeGeometry', routeGeometry)
 provide('destination', destination)
 provide('autonomy', autonomy)
+provide('maxAutonomy', maxAutonomy)
 provide('plannedStops', plannedStops)
 provide('winterMode', winterMode)
+provide('winterFactor', winterFactor)
+provide('avoidTolls', avoidTolls)
+provide('roundTripMode', roundTripMode)
 provide('alternativeRoutes', alternativeRoutes)
 provide('selectedRouteIndex', selectedRouteIndex)
+provide('refreshChargers', refreshChargers)
+provide('focusStop', focusStop)
 
 startTracking()
 </script>
@@ -83,9 +100,26 @@ startTracking()
   <div class="app">
     <header class="header">
       <h1>⚡ EV Finder <span class="version">v{{ version }}</span></h1>
-      <div v-if="position" class="status" aria-live="polite" aria-atomic="true">
+      <div class="header-actions">
         <span v-if="speed > 0" class="speed">{{ Math.round(speed * 3.6) }} km/h</span>
+        <button
+          class="icon-btn"
+          aria-label="Rafraîchir les bornes"
+          :disabled="loading"
+          @click="refreshChargers"
+        >
+          <span :class="{ spinning: loading }" aria-hidden="true">🔄</span>
+        </button>
+        <button
+          class="icon-btn"
+          aria-label="Options"
+          :aria-expanded="optionsOpen"
+          @click="optionsOpen = true"
+        >
+          <span aria-hidden="true">⚙️</span>
+        </button>
         <span
+          v-if="position"
           class="dot"
           :class="{ active: isTracking }"
           role="status"
@@ -93,6 +127,8 @@ startTracking()
         />
       </div>
     </header>
+
+    <OptionsMenu v-if="optionsOpen" @close="optionsOpen = false" />
 
     <DestinationSearch
       :destination="destination"
@@ -103,26 +139,18 @@ startTracking()
       :route-geometry="routeGeometry"
       :autonomy="autonomy"
       :max-autonomy="maxAutonomy"
-      :winter-mode="winterMode"
       :round-trip-mode="roundTripMode"
       :round-trip-analysis="roundTripAnalysis"
-      :winter-factor="winterFactor"
       :planned-stops="plannedStops"
-      :avoid-tolls="avoidTolls"
       :alternative-routes="alternativeRoutes"
       :selected-route-index="selectedRouteIndex"
       @search="searchDestination"
       @select="selectDestination"
       @clear="clearDestination"
       @update:autonomy="val => autonomy = val"
-      @update:max-autonomy="val => maxAutonomy = val"
-      @update:winter-mode="val => winterMode = val"
-      @update:round-trip-mode="val => roundTripMode = val"
-      @update:avoid-tolls="val => avoidTolls = val"
       @select-route="selectRoute"
+      @focus-stop="onFocusStop"
     />
-
-    <FilterBar />
 
     <main class="content">
       <div v-if="permissionDenied" class="permission-help" role="alert">
@@ -249,10 +277,38 @@ select:focus:not(:focus-visible) {
   vertical-align: middle;
 }
 
-.status {
+.header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn .spinning {
+  display: inline-block;
+  animation: spin 1s linear infinite;
 }
 
 .speed {
@@ -281,7 +337,8 @@ select:focus:not(:focus-visible) {
   flex: 1;
   overflow: auto;
   position: relative;
-  min-height: 300px;
+  /* Garantir que la carte reste grande même avec un trajet + arrêts affichés */
+  min-height: max(320px, 45dvh);
 }
 
 .loading, .error, .permission-help {

@@ -230,8 +230,12 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
       return { ...c, distanceAlongRoute }
     }).filter(c => c.distanceAlongRoute < Infinity)
 
-    // Ne garder que les bornes au-delà du seuil (quand on aura 30% restant)
-    return chargersWithRouteDistance.filter(c => c.distanceAlongRoute >= showFromDistance)
+    // Ne garder que les bornes DEVANT nous sur le trajet (jamais celles déjà dépassées,
+    // qui se projettent près du départ) et au-delà du seuil d'autonomie (30% restant).
+    const MIN_AHEAD_KM = 1 // ignore ce qui est au niveau/derrière le point de départ
+    return chargersWithRouteDistance.filter(
+      c => c.distanceAlongRoute >= Math.max(showFromDistance, MIN_AHEAD_KM)
+    )
   })
 
   return {

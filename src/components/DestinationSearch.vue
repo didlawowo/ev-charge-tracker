@@ -1,8 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue'
-import { useTileCache } from '../composables/useTileCache'
 
-const { isCaching, cacheProgress, cacheRouteArea } = useTileCache()
+const stopsExpanded = ref(true)
 
 const props = defineProps({
   destination: { type: Object, default: null },
@@ -13,17 +12,14 @@ const props = defineProps({
   routeGeometry: { type: Array, default: null },
   autonomy: { type: Number, default: 100 },
   maxAutonomy: { type: Number, default: 470 },
-  winterMode: { type: Boolean, default: false },
   roundTripMode: { type: Boolean, default: false },
   roundTripAnalysis: { type: Object, default: null },
-  winterFactor: { type: Number, default: 1 },
   plannedStops: { type: Array, default: () => [] },
-  avoidTolls: { type: Boolean, default: false },
   alternativeRoutes: { type: Array, default: () => [] },
   selectedRouteIndex: { type: Number, default: 0 }
 })
 
-const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'update:maxAutonomy', 'update:winterMode', 'update:roundTripMode', 'update:avoidTolls', 'selectRoute'])
+const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'selectRoute', 'focusStop'])
 
 const inputValue = ref(props.destinationQuery || '')
 let debounceTimeout = null
@@ -62,63 +58,57 @@ const formatDistance = (meters) => {
   return `${(meters / 1000).toFixed(0)} km`
 }
 
-const onAutonomyChange = (e) => {
-  let val = parseInt(e.target.value) || 100
-  // S'assurer que l'autonomie restante ne dépasse pas l'autonomie max
-  if (val > props.maxAutonomy) {
-    val = props.maxAutonomy
-  }
-  emit('update:autonomy', val)
+const onAutonomyInput = (e) => {
+  const val = parseInt(e.target.value)
+  if (!Number.isFinite(val)) return
+  // Plafonner au max voiture pendant la saisie (le plancher est appliqué au blur)
+  emit('update:autonomy', Math.min(val, props.maxAutonomy))
 }
 
-const onMaxAutonomyChange = (e) => {
-  const val = parseInt(e.target.value) || 400
-  emit('update:maxAutonomy', val)
-  // S'assurer que l'autonomie restante ne dépasse pas l'autonomie max
-  if (props.autonomy > val) {
-    emit('update:autonomy', val)
-  }
-}
-
-const onWinterModeToggle = () => {
-  emit('update:winterMode', !props.winterMode)
-}
-
-const onAvoidTollsToggle = () => {
-  emit('update:avoidTolls', !props.avoidTolls)
-}
-
-const onRoundTripToggle = () => {
-  emit('update:roundTripMode', !props.roundTripMode)
-}
-
-const downloadMapForOffline = async () => {
-  if (props.routeGeometry) {
-    await cacheRouteArea(props.routeGeometry, 5)
-  }
+const onAutonomyBlur = (e) => {
+  let val = parseInt(e.target.value)
+  if (!Number.isFinite(val)) val = 10
+  emit('update:autonomy', Math.min(Math.max(val, 10), props.maxAutonomy))
 }
 </script>
 
 <template>
   <div class="destination-search">
-    <div class="search-input-wrapper">
-      <input
-        type="text"
-        :value="inputValue"
-        placeholder="Destination..."
-        class="search-input"
-        @input="onInput"
-      >
-      <button
-        v-if="destination"
-        type="button"
-        class="clear-btn"
-        aria-label="Effacer la destination"
-        @click="onClear"
-      >
-        <span aria-hidden="true">✕</span>
-      </button>
-      <div v-if="isSearching" class="search-spinner" role="status" aria-label="Recherche en cours" />
+    <div class="top-row">
+      <div class="search-input-wrapper">
+        <input
+          type="text"
+          :value="inputValue"
+          placeholder="Destination..."
+          class="search-input"
+          @input="onInput"
+        >
+        <button
+          v-if="destination"
+          type="button"
+          class="clear-btn"
+          aria-label="Effacer la destination"
+          @click="onClear"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+        <div v-if="isSearching" class="search-spinner" role="status" aria-label="Recherche en cours" />
+      </div>
+
+      <div class="autonomy-field">
+        <input
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="3"
+          :value="autonomy"
+          class="autonomy-input"
+          aria-label="Autonomie restante en km"
+          @input="onAutonomyInput"
+          @blur="onAutonomyBlur"
+        >
+        <span class="autonomy-unit">km</span>
+      </div>
     </div>
 
     <div v-if="suggestions.length > 0" class="suggestions">
@@ -135,17 +125,6 @@ const downloadMapForOffline = async () => {
     <div v-if="routeInfo" class="route-info">
       <span>{{ formatDistance(routeInfo.distance) }}{{ roundTripMode ? ' × 2' : '' }}</span>
       <span>{{ formatDuration(roundTripMode ? routeInfo.duration * 2 : routeInfo.duration) }}</span>
-      <button
-        type="button"
-        class="offline-btn"
-        :class="{ caching: isCaching }"
-        :disabled="isCaching"
-        :aria-label="isCaching ? `Téléchargement des tuiles en cours, ${cacheProgress}%` : 'Télécharger les tuiles de la carte pour usage hors-ligne'"
-        @click="downloadMapForOffline"
-      >
-        <span v-if="isCaching">{{ cacheProgress }}%</span>
-        <span v-else><span aria-hidden="true">📥 </span>Offline</span>
-      </button>
     </div>
 
     <!-- Analyse aller-retour -->
@@ -178,81 +157,45 @@ const downloadMapForOffline = async () => {
       </button>
     </div>
 
-    <div class="autonomy-controls">
-      <div class="autonomy-sliders">
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Restante</span>
-            <span class="autonomy-value">{{ autonomy }} km</span>
-          </div>
-          <input
-            type="range"
-            :value="autonomy"
-            min="0"
-            max="470"
-            step="10"
-            class="slider"
-            @input="onAutonomyChange"
-          >
-        </div>
-        <div class="slider-group">
-          <div class="slider-header">
-            <span>Max voiture</span>
-            <span class="autonomy-value secondary">{{ maxAutonomy }} km</span>
-          </div>
-          <input
-            type="range"
-            :value="maxAutonomy"
-            min="100"
-            max="470"
-            step="10"
-            class="slider secondary"
-            @input="onMaxAutonomyChange"
-          >
-        </div>
-      </div>
-      <button
-        class="winter-toggle"
-        :class="{ active: winterMode }"
-        @click="onWinterModeToggle"
-      >
-        <span class="winter-icon">{{ winterMode ? '❄️' : '☀️' }}</span>
-        <span class="winter-label">{{ winterMode ? 'Hiver' : 'Été' }}</span>
-        <span v-if="winterMode" class="winter-factor">{{ Math.round(winterFactor * 100) }}%</span>
-      </button>
-      <button
-        class="toll-toggle"
-        :class="{ active: avoidTolls }"
-        @click="onAvoidTollsToggle"
-      >
-        <span class="toll-icon">🛣️</span>
-        <span class="toll-label">{{ avoidTolls ? 'Gratuit' : 'Péages' }}</span>
-      </button>
-      <button
-        class="roundtrip-toggle"
-        :class="{ active: roundTripMode }"
-        @click="onRoundTripToggle"
-      >
-        <span class="roundtrip-icon">🔄</span>
-        <span class="roundtrip-label">{{ roundTripMode ? 'A/R' : 'Aller' }}</span>
-      </button>
-    </div>
-
     <div v-if="plannedStops && plannedStops.length > 0" class="planned-stops">
-      <div class="stops-header">
-        <span>{{ plannedStops.length }} arrêt{{ plannedStops.length > 1 ? 's' : '' }} recommandé{{ plannedStops.length > 1 ? 's' : '' }}</span>
-      </div>
-      <div
-        v-for="stop in plannedStops"
-        :key="stop.id"
-        class="stop-item"
+      <button
+        type="button"
+        class="stops-header"
+        :aria-expanded="stopsExpanded"
+        @click="stopsExpanded = !stopsExpanded"
       >
-        <span class="stop-number">{{ stop.stopNumber }}</span>
-        <div class="stop-info">
-          <strong>{{ stop.name }}</strong>
-          <span class="stop-details">
-            {{ Math.round(stop.distanceFromStart) }} km · {{ stop.operator }}
-          </span>
+        <span>{{ plannedStops.length }} arrêt{{ plannedStops.length > 1 ? 's' : '' }} recommandé{{ plannedStops.length > 1 ? 's' : '' }}</span>
+        <span class="stops-chevron" aria-hidden="true">{{ stopsExpanded ? '▾' : '▸' }}</span>
+      </button>
+      <div v-show="stopsExpanded" class="stops-list">
+        <div
+          v-for="stop in plannedStops"
+          :key="stop.id"
+          class="stop-item"
+        >
+          <button
+            type="button"
+            class="stop-main"
+            :aria-label="`Voir ${stop.name} sur la carte`"
+            @click="emit('focusStop', stop)"
+          >
+            <span class="stop-number">{{ stop.stopNumber }}</span>
+            <div class="stop-info">
+              <strong>{{ stop.name }}</strong>
+              <span class="stop-details">
+                {{ Math.round(stop.distanceFromStart) }} km · {{ stop.operator }}
+              </span>
+            </div>
+            <span class="stop-locate" aria-hidden="true">📍</span>
+          </button>
+          <a
+            :href="stop.detailsUrl"
+            target="_blank"
+            rel="noopener"
+            class="stop-details-link"
+          >
+            Fiche ↗
+          </a>
         </div>
       </div>
     </div>
@@ -266,10 +209,50 @@ const downloadMapForOffline = async () => {
   border-bottom: 1px solid var(--border);
 }
 
+.top-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
 .search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.autonomy-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.autonomy-input {
+  width: 78px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: right;
+  padding: 10px 26px 10px 10px;
+  outline: none;
+}
+
+.autonomy-input:focus {
+  border-color: var(--primary);
+}
+
+.autonomy-unit {
+  position: absolute;
+  right: 8px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  pointer-events: none;
 }
 
 .search-input {
@@ -358,136 +341,85 @@ const downloadMapForOffline = async () => {
   flex-wrap: wrap;
 }
 
-.offline-btn {
-  padding: 4px 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-left: auto;
-}
-
-.offline-btn:hover:not(:disabled) {
-  border-color: var(--primary);
-  background: rgba(16, 185, 129, 0.1);
-}
-
-.offline-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.offline-btn.caching {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
-
-.autonomy-controls {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  margin-top: 10px;
-  padding: 8px 0;
-}
-
-.autonomy-sliders {
-  display: flex;
-  gap: 16px;
-  flex: 1;
-}
-
-.slider-group {
-  flex: 1;
-}
-
-.slider-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.autonomy-value {
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.autonomy-value.secondary {
-  color: #f59e0b;
-}
-
-.slider {
-  width: 100%;
-  height: 5px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--border);
-  border-radius: 3px;
-  outline: none;
-}
-
-.slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.slider.secondary::-webkit-slider-thumb {
-  background: #f59e0b;
-}
-
-.slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: var(--primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.slider.secondary::-moz-range-thumb {
-  background: #f59e0b;
-}
-
 .planned-stops {
   margin-top: 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
+  /* Laisser la carte respirer : la liste ne dépasse pas ~2,5 arrêts, le reste scrolle */
+  max-height: 168px;
+  display: flex;
+  flex-direction: column;
 }
 
 .stops-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   padding: 8px 12px;
   background: var(--primary);
   color: white;
   font-size: 0.8rem;
   font-weight: 500;
+  flex-shrink: 0;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.stops-chevron {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.stops-list {
+  overflow-y: auto;
 }
 
 .stop-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .stop-item:last-child {
   border-bottom: none;
+}
+
+.stop-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stop-locate {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.stop-details-link {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  border-radius: 4px;
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .stop-number {
@@ -520,113 +452,6 @@ const downloadMapForOffline = async () => {
 .stop-details {
   font-size: 0.75rem;
   color: var(--text-muted);
-}
-
-.winter-toggle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 60px;
-}
-
-.winter-toggle:hover {
-  border-color: var(--primary);
-}
-
-.winter-toggle.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-}
-
-.winter-icon {
-  font-size: 1.2rem;
-}
-
-.winter-label {
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-.winter-factor {
-  font-size: 0.65rem;
-  opacity: 0.8;
-}
-
-.toll-toggle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 60px;
-}
-
-.toll-toggle:hover {
-  border-color: var(--primary);
-}
-
-.toll-toggle.active {
-  background: #22c55e;
-  border-color: #22c55e;
-  color: white;
-}
-
-.toll-icon {
-  font-size: 1.2rem;
-}
-
-.toll-label {
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-.roundtrip-toggle {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 60px;
-}
-
-.roundtrip-toggle:hover {
-  border-color: var(--primary);
-}
-
-.roundtrip-toggle.active {
-  background: #8b5cf6;
-  border-color: #8b5cf6;
-  color: white;
-}
-
-.roundtrip-icon {
-  font-size: 1.2rem;
-}
-
-.roundtrip-label {
-  font-size: 0.7rem;
-  font-weight: 500;
 }
 
 .roundtrip-analysis {
