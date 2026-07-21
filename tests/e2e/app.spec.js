@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test'
 
+const PARIS = { latitude: 48.8566, longitude: 2.3522 }
+
 test.describe('EV Finder App', () => {
   test.beforeEach(async ({ page, context }) => {
     // Mock geolocation (Paris)
     await context.grantPermissions(['geolocation'])
-    await context.setGeolocation({ latitude: 48.8566, longitude: 2.3522 })
+    await context.setGeolocation(PARIS)
     await page.goto('/')
   })
 
@@ -35,15 +37,20 @@ test.describe('EV Finder App', () => {
     await expect(page.locator('.map-container')).toBeVisible()
   })
 
-  test('should display filter bar', async ({ page }) => {
-    await expect(page.locator('.filter-bar')).toBeVisible()
+  test('should have a refresh button in the header', async ({ page }) => {
+    await expect(page.locator('button[aria-label="Rafraîchir les bornes"]')).toBeVisible()
+  })
+
+  test('should open the options menu', async ({ page }) => {
+    await page.click('button[aria-label="Options"]')
+    await expect(page.locator('.options-panel')).toBeVisible()
   })
 })
 
-test.describe('Destination Search', () => {
+test.describe('Destination & autonomy', () => {
   test.beforeEach(async ({ page, context }) => {
     await context.grantPermissions(['geolocation'])
-    await context.setGeolocation({ latitude: 48.8566, longitude: 2.3522 })
+    await context.setGeolocation(PARIS)
     await page.goto('/')
     await page.waitForSelector('.map-container', { timeout: 10000 })
   })
@@ -52,60 +59,57 @@ test.describe('Destination Search', () => {
     await expect(page.locator('.search-input')).toBeVisible()
   })
 
-  test('should show autonomy controls', async ({ page }) => {
-    await expect(page.locator('.autonomy-controls')).toBeVisible()
+  test('should have a numeric autonomy input', async ({ page }) => {
+    const autonomy = page.locator('.autonomy-input')
+    await expect(autonomy).toBeVisible()
+    await expect(autonomy).toHaveAttribute('inputmode', 'numeric')
+  })
+})
+
+test.describe('Options menu', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation(PARIS)
+    await page.goto('/')
+    await page.waitForSelector('.map-container', { timeout: 10000 })
+    await page.click('button[aria-label="Options"]')
+    await page.waitForSelector('.options-panel', { timeout: 5000 })
   })
 
   test('should toggle winter mode', async ({ page }) => {
-    const winterToggle = page.locator('.winter-toggle')
+    const winterToggle = page.locator('.toggle.winter')
     await expect(winterToggle).toBeVisible()
-
-    // Initial state
     await expect(winterToggle).not.toHaveClass(/active/)
 
-    // Toggle on
     await winterToggle.click()
     await expect(winterToggle).toHaveClass(/active/)
 
-    // Toggle off
     await winterToggle.click()
     await expect(winterToggle).not.toHaveClass(/active/)
   })
 
   test('should toggle toll avoidance', async ({ page }) => {
-    const tollToggle = page.locator('.toll-toggle')
+    const tollToggle = page.locator('.toggle.toll')
     await expect(tollToggle).toBeVisible()
-
-    // Initial state (tolls allowed)
     await expect(tollToggle).not.toHaveClass(/active/)
 
-    // Toggle to avoid tolls
     await tollToggle.click()
     await expect(tollToggle).toHaveClass(/active/)
   })
-})
 
-test.describe('Filter Bar', () => {
-  test.beforeEach(async ({ page, context }) => {
-    await context.grantPermissions(['geolocation'])
-    await context.setGeolocation({ latitude: 48.8566, longitude: 2.3522 })
-    await page.goto('/')
-    await page.waitForSelector('.filter-bar', { timeout: 10000 })
+  test('should have a power filter', async ({ page }) => {
+    await expect(page.locator('.options-panel select').first()).toBeVisible()
   })
 
-  test('should have radius filter', async ({ page }) => {
-    await expect(page.locator('.filter-bar').getByText(/km/)).toBeVisible()
-  })
-
-  test('should have power filter', async ({ page }) => {
-    await expect(page.locator('.filter-bar select').first()).toBeVisible()
+  test('should have a radius filter', async ({ page }) => {
+    await expect(page.locator('.radius-value')).toContainText('km')
   })
 })
 
 test.describe('Map Interactions', () => {
   test.beforeEach(async ({ page, context }) => {
     await context.grantPermissions(['geolocation'])
-    await context.setGeolocation({ latitude: 48.8566, longitude: 2.3522 })
+    await context.setGeolocation(PARIS)
     await page.goto('/')
     await page.waitForSelector('.map-container', { timeout: 10000 })
   })
@@ -125,7 +129,7 @@ test.describe('Mobile Responsiveness', () => {
 
   test('should display correctly on mobile', async ({ page, context }) => {
     await context.grantPermissions(['geolocation'])
-    await context.setGeolocation({ latitude: 48.8566, longitude: 2.3522 })
+    await context.setGeolocation(PARIS)
     await page.goto('/')
 
     await expect(page.locator('h1')).toContainText('EV Finder')
