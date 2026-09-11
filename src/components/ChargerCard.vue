@@ -1,6 +1,7 @@
 <script setup>
 import { computed, inject, ref } from 'vue'
-import { googleMapsUrl, appleMapsUrl } from '../utils'
+import { googleMapsUrl, appleMapsUrl, maxCcsPower, formatDistance } from '../utils'
+import AppIcon from './AppIcon.js'
 
 const props = defineProps({
   charger: {
@@ -11,6 +12,8 @@ const props = defineProps({
 
 const position = inject('position', ref(null))
 const destination = inject('destination', ref(null))
+const plannedStops = inject('plannedStops', ref([]))
+const focusOnMap = inject('focusOnMap', null)
 
 const googleUrl = computed(() =>
   googleMapsUrl(position.value, props.charger, destination.value)
@@ -19,185 +22,250 @@ const appleUrl = computed(() =>
   appleMapsUrl(position.value, props.charger)
 )
 
-const formatDistance = (meters) => {
-  if (meters < 1000) {
-    return `${Math.round(meters)} m`
-  }
-  return `${(meters / 1000).toFixed(1)} km`
-}
+const maxPower = computed(() => maxCcsPower(props.charger))
 
-// Filtrer pour n'afficher que les CCS
-const ccsConnections = computed(() => {
-  return props.charger.connections.filter(c =>
-    c.typeId === 33 || c.typeId === 32 || c.type.toLowerCase().includes('ccs')
-  )
+const powerClass = computed(() => {
+  if (!maxPower.value) return 'unknown'
+  if (maxPower.value >= 150) return 'ultra'
+  if (maxPower.value >= 50) return 'fast'
+  return 'slow'
 })
 
-const getMaxPower = computed(() => {
-  const powers = ccsConnections.value.map(c => c.power).filter(p => p)
-  return powers.length > 0 ? Math.max(...powers) : null
-})
+const stopNumber = computed(() =>
+  plannedStops.value.find(s => s.id === props.charger.id)?.stopNumber ?? null
+)
+
+const place = computed(() => props.charger.town || props.charger.address)
 </script>
 
 <template>
-  <div class="charger-card" :class="{ offline: !charger.isOperational }">
-    <div class="card-header">
-      <div class="distance">{{ formatDistance(charger.distance) }}</div>
-      <div v-if="getMaxPower" class="power">{{ getMaxPower }} kW</div>
-      <div class="operator">{{ charger.operator }}</div>
-    </div>
+  <article class="charger-card" :class="{ offline: !charger.isOperational, 'is-stop': stopNumber }">
+    <button
+      type="button"
+      class="card-main"
+      :aria-label="`Voir ${charger.name} sur la carte`"
+      @click="focusOnMap?.(charger)"
+    >
+      <span class="power-badge" :class="powerClass">
+        <template v-if="maxPower">
+          <strong>{{ maxPower }}</strong>
+          <small>kW</small>
+        </template>
+        <AppIcon v-else name="bolt" :size="20" />
+      </span>
 
-    <div class="card-body">
-      <h3 class="name">{{ charger.name }}</h3>
-      <p class="address">{{ charger.town || charger.address }}</p>
-    </div>
-
-    <div class="card-footer">
-      <div v-if="ccsConnections.length > 0" class="connections">
-        <span
-          v-for="(conn, i) in ccsConnections.slice(0, 2)"
-          :key="i"
-          class="connection-tag"
-        >
-          {{ conn.power }}kW
+      <span class="card-info">
+        <span class="name">{{ charger.name }}</span>
+        <span class="meta">
+          {{ charger.operator }}<template v-if="place"> · {{ place }}</template>
         </span>
-      </div>
-      <span v-if="charger.usageCost" class="price">{{ charger.usageCost }}</span>
-      <div class="card-actions">
-        <a :href="googleUrl" target="_blank" rel="noopener" class="maps-link google">Maps</a>
-        <a :href="appleUrl" target="_blank" rel="noopener" class="maps-link apple">Plans</a>
-        <a
-          :href="charger.detailsUrl"
-          target="_blank"
-          rel="noopener"
-          class="chargemap-link"
-        >
-          Détails ↗
-        </a>
-      </div>
+        <span class="tags">
+          <span v-if="stopNumber" class="tag stop">Arrêt {{ stopNumber }}</span>
+          <span v-if="!charger.isOperational" class="tag off">Hors service</span>
+          <span v-if="charger.numberOfPoints" class="tag">{{ charger.numberOfPoints }} point{{ charger.numberOfPoints > 1 ? 's' : '' }}</span>
+          <span v-if="charger.usageCost" class="tag price">{{ charger.usageCost }}</span>
+        </span>
+      </span>
+
+      <span class="distance">{{ formatDistance(charger.distance) }}</span>
+    </button>
+
+    <div class="card-actions">
+      <a :href="googleUrl" target="_blank" rel="noopener" class="action primary">
+        <AppIcon name="navigation" :size="15" />
+        Google Maps
+      </a>
+      <a :href="appleUrl" target="_blank" rel="noopener" class="action">Plans</a>
+      <a
+        :href="charger.detailsUrl"
+        target="_blank"
+        rel="noopener"
+        class="action ghost"
+        aria-label="Fiche OpenChargeMap"
+      >
+        Fiche
+        <AppIcon name="external" :size="14" />
+      </a>
     </div>
-  </div>
+  </article>
 </template>
 
 <style scoped>
 .charger-card {
   background: var(--bg-card);
-  border-radius: 8px;
-  padding: 10px 12px;
   border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
-.charger-card.offline {
-  opacity: 0.5;
+.charger-card.is-stop {
+  border-color: rgba(59, 130, 246, 0.6);
 }
 
-.card-header {
+.card-main {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
-  font-size: 0.75rem;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 12px 8px;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.distance {
+.power-badge {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  line-height: 1;
+}
+
+.power-badge strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.power-badge small {
+  margin-top: 2px;
+  font-size: 0.65rem;
   font-weight: 600;
+}
+
+.power-badge.ultra {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.power-badge.fast {
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
-.power {
-  color: var(--primary);
-  font-weight: 500;
-}
-
-.operator {
+.power-badge.slow,
+.power-badge.unknown {
+  background: var(--bg-elevated);
   color: var(--text-muted);
-  margin-left: auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
 }
 
-.card-body {
-  margin-bottom: 6px;
+.offline .power-badge {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .name {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.address {
-  font-size: 0.75rem;
+.meta {
+  font-size: 0.8rem;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.card-footer {
+.tags {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.connections {
-  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
+  margin-top: 4px;
 }
 
-.connection-tag {
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  background: var(--border);
-  border-radius: 4px;
+.tag {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
   color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
 }
 
-.price {
-  font-size: 0.7rem;
-  color: #f59e0b;
-  flex: 1;
+.tag.stop {
+  background: rgba(59, 130, 246, 0.2);
+  color: #9cc2ff;
+}
+
+.tag.off {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+}
+
+.tag.price {
+  max-width: 100%;
+  color: var(--warning);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.distance {
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .card-actions {
   display: flex;
-  align-items: center;
   gap: 6px;
-  margin-left: auto;
+  padding: 0 12px 12px 76px;
 }
 
-.maps-link {
-  padding: 4px 8px;
-  border-radius: 4px;
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
   text-decoration: none;
-  font-weight: 500;
-  font-size: 0.7rem;
   white-space: nowrap;
 }
 
-.maps-link.google {
-  background: rgba(66, 133, 244, 0.15);
-  color: #6ba1ff;
+.action.primary {
+  border-color: transparent;
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
-.maps-link.apple {
-  background: rgba(148, 163, 184, 0.15);
+.action.ghost {
+  margin-left: auto;
+  background: none;
+  border-color: transparent;
   color: var(--text-muted);
 }
 
-.chargemap-link {
-  padding: 4px 8px;
-  background: rgba(16, 185, 129, 0.15);
-  border-radius: 4px;
-  color: var(--primary);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.7rem;
-  white-space: nowrap;
+@media (max-width: 360px) {
+  .card-actions {
+    padding-left: 12px;
+  }
 }
 </style>

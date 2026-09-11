@@ -72,13 +72,17 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
+            // Tuiles déjà affichées uniquement : le pré-téléchargement est interdit par la
+            // politique OSM. Workbox ne lit pas les en-têtes de cache, la politique demande
+            // alors de garder les tuiles au moins 7 jours.
+            urlPattern: /^https:\/\/tile\.openstreetmap\.org\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'osm-tiles-cache',
+              cacheableResponse: { statuses: [200] },
               expiration: {
-                maxEntries: 1000,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxEntries: 2000,
+                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
               }
             }
           },

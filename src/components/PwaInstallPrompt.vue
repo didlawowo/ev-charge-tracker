@@ -1,5 +1,6 @@
 <script setup>
 import { usePwaInstall } from '../composables/usePwaInstall'
+import AppIcon from './AppIcon.js'
 
 const {
   isIOS,
@@ -16,23 +17,22 @@ const handleInstall = async () => {
 
 <template>
   <Transition name="slide-up">
-    <div v-if="shouldShowBanner" class="install-banner">
-      <div class="install-content">
-        <div class="install-icon">⚡</div>
-        <div class="install-text">
-          <strong>Installer EV Finder</strong>
-          <p v-if="isAndroid">Accès rapide depuis l'écran d'accueil</p>
-          <p v-else-if="isIOS">
-            Appuyez sur <span class="ios-share">↑</span> puis "Sur l'écran d'accueil"
-          </p>
-        </div>
+    <div v-if="shouldShowBanner" class="install-banner" role="dialog" aria-label="Installer l'application">
+      <div class="install-icon"><AppIcon name="bolt" :size="20" /></div>
+      <div class="install-text">
+        <strong>Installer EV Finder</strong>
+        <p v-if="isAndroid">Accès rapide depuis l'écran d'accueil</p>
+        <p v-else-if="isIOS">
+          <span class="ios-share" aria-hidden="true">↑</span> Partager, puis « Sur l'écran d'accueil »
+        </p>
       </div>
       <div class="install-actions">
         <button v-if="isAndroid" class="btn-install" @click="handleInstall">
           Installer
         </button>
-        <button class="btn-dismiss" @click="dismissInstall">
-          {{ isIOS ? 'OK' : 'Plus tard' }}
+        <button class="btn-dismiss" :aria-label="isIOS ? 'Fermer' : 'Plus tard'" @click="dismissInstall">
+          <template v-if="isAndroid">Plus tard</template>
+          <AppIcon v-else name="x" :size="18" />
         </button>
       </div>
     </div>
@@ -40,106 +40,97 @@ const handleInstall = async () => {
 </template>
 
 <style scoped>
+/* Au-dessus de la barre d'onglets (56px) sans masquer les contrôles de la carte */
 .install-banner {
   position: fixed;
-  bottom: 70px;
   left: 12px;
   right: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px;
-  z-index: 1000;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.install-content {
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  z-index: 1500;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  padding: 10px 6px 10px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
 }
 
 .install-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  border-radius: 12px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .install-text {
   flex: 1;
+  min-width: 0;
 }
 
 .install-text strong {
   display: block;
-  font-size: 1rem;
-  margin-bottom: 4px;
+  font-size: 0.9rem;
 }
 
 .install-text p {
-  font-size: 0.875rem;
-  color: var(--text-muted);
   margin: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .ios-share {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   background: #007aff;
   color: white;
   border-radius: 4px;
-  font-size: 14px;
-  margin: 0 2px;
+  font-size: 11px;
+  vertical-align: -2px;
 }
 
 .install-actions {
+  flex-shrink: 0;
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 4px;
 }
 
 .btn-install {
-  flex: 1;
-  padding: 12px 20px;
+  min-height: 40px;
+  padding: 0 14px;
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   border: none;
   border-radius: 10px;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s;
-}
-
-.btn-install:hover {
-  background: var(--primary-dark);
-}
-
-.btn-install:active {
-  transform: scale(0.98);
 }
 
 .btn-dismiss {
-  padding: 12px 20px;
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  background: none;
+  border: none;
   border-radius: 10px;
-  font-size: 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-dismiss:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
 }
 
 /* Animation */
@@ -152,12 +143,5 @@ const handleInstall = async () => {
 .slide-up-leave-to {
   transform: translateY(100%);
   opacity: 0;
-}
-
-/* Safe area pour les appareils avec notch en bas */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .install-banner {
-    bottom: calc(70px + env(safe-area-inset-bottom));
-  }
 }
 </style>

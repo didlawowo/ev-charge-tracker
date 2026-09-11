@@ -22,18 +22,19 @@ Pour garder l'écran principal épuré, les réglages secondaires sont regroupé
 - **Sans Tesla** (exclut les Superchargeurs des bornes et des arrêts)
 - **Puissance minimale** (Tout / 50 / 100 / 150 / 300 kW — défaut 100 kW)
 - **Rayon** de recherche (5–100 km, hors trajet)
-- Téléchargement de la **carte hors-ligne** le long du trajet
 
 ### Planification de trajet
 - Recherche de destination avec autocomplétion (Photon / OpenStreetMap).
 - Calcul d'itinéraire + **itinéraires alternatifs** (OSRM).
-- **Autonomie restante** en saisie numérique rapide, sur la même ligne que la destination.
+- **Autonomie restante** à côté de la destination : un appui ouvre un panneau d'édition (saisie, ±10 km, curseur, raccourcis 20/50/80/100 %).
 - **Arrêts de recharge recommandés** : algorithme glouton qui minimise le nombre d'arrêts (recharge cible 80 %, marge de sécurité 10 %). Liste repliable, chaque arrêt est **cliquable** pour le centrer sur la carte.
 - **Envoyer vers une appli de navigation** : boutons **Google Maps** (avec la borne intégrée en point de passage départ → borne → destination) et **Apple Plans** (itinéraire vers la borne — Apple ne supporte pas de point de passage via URL).
 
 ### PWA / hors-ligne
 - Installable sur mobile.
-- Cache des tuiles de carte (CacheFirst), des données de bornes et des recherches d'adresses (NetworkFirst) via Workbox.
+- **Dernier trajet enregistré** sur l'appareil (itinéraire, arrêts, bornes) : réaffiché automatiquement si l'app est ouverte sans réseau, ou via « Reprendre le dernier trajet ».
+- Tuiles de carte : seules les zones déjà affichées restent en cache (7 jours). Le pré-téléchargement est interdit par la [politique d'usage des tuiles OSM](https://operations.osmfoundation.org/policies/tiles/).
+- Données de bornes, itinéraires et recherches d'adresses en cache NetworkFirst via Workbox.
 
 ## Démarrage
 
@@ -79,7 +80,7 @@ les variables d'environnement du dashboard Netlify (jamais commitée).
 | Service        | Usage                       | Cache     |
 | -------------- | --------------------------- | --------- |
 | OpenChargeMap  | Données des bornes          | 5 min     |
-| OpenStreetMap  | Tuiles de carte             | 30 jours  |
+| OpenStreetMap  | Tuiles de carte (vues)      | 7 jours   |
 | OSRM           | Calcul d'itinéraire         | 1 heure   |
 | Photon (Komoot)| Autocomplétion d'adresses   | 1 jour    |
 
