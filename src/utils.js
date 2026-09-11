@@ -36,6 +36,18 @@ export function isCCSConnection(conn) {
 }
 
 /**
+ * Puissance max (kW) parmi les connecteurs CCS d'une borne, ou null si inconnue.
+ * @param {{connections:Array<{power?:number}>}} charger
+ */
+export function maxCcsPower(charger) {
+  const powers = (charger.connections || [])
+    .filter(isCCSConnection)
+    .map(c => c.power)
+    .filter(p => p)
+  return powers.length > 0 ? Math.max(...powers) : null
+}
+
+/**
  * Formate une distance en mètres pour l'affichage (« 850 m », « 12,4 km », « 108 km »).
  * @param {number} meters
  */
@@ -44,6 +56,19 @@ export function formatDistance(meters) {
   if (meters < 1000) return `${Math.round(meters)} m`
   const km = meters / 1000
   return km < 100 ? `${km.toFixed(1).replace('.', ',')} km` : `${Math.round(km)} km`
+}
+
+/**
+ * Date/heure courte d'un enregistrement (« 11/09 14:32 »).
+ * @param {number} timestamp - millisecondes
+ */
+export function formatSavedAt(timestamp) {
+  return new Date(timestamp).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 /**

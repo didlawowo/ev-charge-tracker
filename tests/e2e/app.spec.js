@@ -65,10 +65,36 @@ test.describe('Destination & autonomy', () => {
     await expect(page.locator('.search-input')).toBeVisible()
   })
 
-  test('should have a numeric autonomy input', async ({ page }) => {
-    const autonomy = page.locator('.autonomy-input')
+  test('should open the autonomy editor with a numeric input', async ({ page }) => {
+    await page.click('.autonomy-field')
+    const autonomy = page.locator('.autonomy-editor .autonomy-input')
     await expect(autonomy).toBeVisible()
     await expect(autonomy).toHaveAttribute('inputmode', 'numeric')
+  })
+
+  test('should replace the autonomy by typing and pressing Enter', async ({ page }) => {
+    await page.click('.autonomy-field')
+    await page.fill('.autonomy-editor .autonomy-input', '180')
+    await page.press('.autonomy-editor .autonomy-input', 'Enter')
+    await expect(page.locator('.autonomy-editor')).toHaveCount(0)
+    await expect(page.locator('.autonomy-number')).toHaveText('180')
+  })
+
+  test('should set the autonomy from a preset and the -10 step', async ({ page }) => {
+    await page.click('.autonomy-field')
+    await page.click('.autonomy-editor .preset:has-text("50 %")')
+    await page.click('.autonomy-editor button[aria-label="Retirer 10 km"]')
+    await expect(page.locator('.autonomy-editor .autonomy-input')).toHaveValue('225')
+    await page.click('.autonomy-editor .confirm-btn')
+    await expect(page.locator('.autonomy-number')).toHaveText('225')
+  })
+
+  test('should cancel the autonomy editor without changing the value', async ({ page }) => {
+    await page.click('.autonomy-field')
+    await page.fill('.autonomy-editor .autonomy-input', '42')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.autonomy-editor')).toHaveCount(0)
+    await expect(page.locator('.autonomy-number')).toHaveText('100')
   })
 })
 
@@ -131,5 +157,66 @@ test.describe('Mobile Responsiveness', () => {
 
     await expect(page.locator('h1')).toContainText('EV Finder')
     await expect(page.locator('.tabs')).toBeVisible()
+  })
+})
+
+test.describe('Offline trip', () => {
+  const TRIP_STORAGE_KEY = 'ev-finder:last-trip'
+  const savedTrip = () => ({
+    version: 1,
+    savedAt: Date.now(),
+    destination: { lat: 45.764, lng: 4.8357, name: 'Lyon, Métropole de Lyon' },
+    destinationQuery: 'Lyon',
+    selectedRouteIndex: 0,
+    routes: [{
+      id: 0,
+      isMain: true,
+      distance: 465000,
+      duration: 17760,
+      coordinates: [[2.3522, 48.8566], [3.5, 47.5], [4.8357, 45.764]]
+    }],
+    chargers: []
+  })
+
+  test.beforeEach(async ({ context }) => {
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation(PARIS)
+  })
+
+  test('should offer to resume the last saved trip', async ({ page }) => {
+    await page.addInitScript(([key, trip]) => {
+      localStorage.setItem(key, JSON.stringify(trip))
+    }, [TRIP_STORAGE_KEY, savedTrip()])
+    await page.goto('/')
+
+    await page.click('.resume-trip .resume-main')
+    await expect(page.locator('.route-summary')).toContainText('465 km')
+    await expect(page.locator('.search-input')).toHaveValue('Lyon')
+  })
+
+  test('should forget the saved trip', async ({ page }) => {
+    await page.addInitScript(([key, trip]) => {
+      if (!sessionStorage.getItem('seeded')) {
+        localStorage.setItem(key, JSON.stringify(trip))
+        sessionStorage.setItem('seeded', '1')
+      }
+    }, [TRIP_STORAGE_KEY, savedTrip()])
+    await page.goto('/')
+
+    await page.click('.resume-trip .resume-forget')
+    await expect(page.locator('.resume-trip')).toHaveCount(0)
+    expect(await page.evaluate(key => localStorage.getItem(key), TRIP_STORAGE_KEY)).toBeNull()
+  })
+
+  test('should restore the last trip automatically when opened offline', async ({ page }) => {
+    await page.addInitScript(([key, trip]) => {
+      localStorage.setItem(key, JSON.stringify(trip))
+      Object.defineProperty(Navigator.prototype, 'onLine', { get: () => false })
+    }, [TRIP_STORAGE_KEY, savedTrip()])
+    await page.goto('/')
+
+    await expect(page.locator('.route-summary')).toContainText('465 km')
+    await page.waitForSelector('.map-container', { timeout: 10000 })
+    await expect(page.locator('.status-pill.offline')).toBeVisible()
   })
 })

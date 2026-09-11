@@ -327,6 +327,8 @@ export function useChargers(position, heading, destination) {
     filterTimeout = setTimeout(() => {
       const pos = position?.value
       if (!pos) return
+      // Hors-ligne : les filtres s'appliquent quand même aux bornes déjà chargées (côté client)
+      if (!navigator.onLine) return
       if (routeGeometry.value) {
         fetchChargersAlongRoute(routeGeometry.value, pos)
       } else {
@@ -343,6 +345,28 @@ export function useChargers(position, heading, destination) {
     clearTimeout(fetchTimeout)
     clearTimeout(filterTimeout)
   })
+
+  // Réaffiche un trajet enregistré sans appel réseau (voir useOfflineTrip)
+  const restoreTrip = ({ routes, selectedRouteIndex: index, chargers: savedChargers, destination: dest }) => {
+    routeRequestId++
+    chargersRequestId++
+    clearTimeout(fetchTimeout)
+    clearTimeout(filterTimeout)
+    // Empêche syncDestination de relancer le calcul quand la destination sera réassignée
+    lastDestId = `${dest.lat}-${dest.lng}`
+
+    alternativeRoutes.value = routes
+    selectedRouteIndex.value = index
+    const selected = routes[index]
+    routeGeometry.value = selected.coordinates
+    routeInfo.value = {
+      distance: selected.distance,
+      duration: selected.duration
+    }
+    chargers.value = savedChargers
+    error.value = null
+    loading.value = false
+  }
 
   const refreshChargers = () => {
     if (position.value) {
@@ -369,6 +393,7 @@ export function useChargers(position, heading, destination) {
     alternativeRoutes,
     selectedRouteIndex,
     selectRoute,
+    restoreTrip,
     refreshChargers
   }
 }
