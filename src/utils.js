@@ -36,6 +36,40 @@ export function isCCSConnection(conn) {
 }
 
 /**
+ * Formate une distance en mètres pour l'affichage (« 850 m », « 12,4 km », « 108 km »).
+ * @param {number} meters
+ */
+export function formatDistance(meters) {
+  if (!Number.isFinite(meters)) return ''
+  if (meters < 1000) return `${Math.round(meters)} m`
+  const km = meters / 1000
+  return km < 100 ? `${km.toFixed(1).replace('.', ',')} km` : `${Math.round(km)} km`
+}
+
+/**
+ * Échappe une chaîne pour l'insérer dans du HTML construit à la main
+ * (bulles Leaflet). Les données OpenChargeMap sont saisies par des tiers.
+ * @param {unknown} value
+ */
+export function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * URL publique de la fiche d'une borne. L'ancienne URL
+ * openchargemap.org/site/poi/details/<id> renvoie désormais une 404 puis la page de connexion.
+ * @param {number} id
+ */
+export function openChargeMapUrl(id) {
+  return `https://map.openchargemap.io/#/poi/${id}`
+}
+
+/**
  * Détermine si une borne est un site Tesla (Supercharger).
  * @param {{operator?:string}} charger
  */

@@ -1,6 +1,6 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { getRouteGeometry, isPointNearRoute } from './useRoute'
-import { isCCSConnection, haversineDistance, isTeslaCharger } from '../utils'
+import { isCCSConnection, haversineDistance, isTeslaCharger, openChargeMapUrl } from '../utils'
 
 export function useChargers(position, heading, destination) {
   const chargers = ref([])
@@ -11,12 +11,10 @@ export function useChargers(position, heading, destination) {
   const minPower = ref(100) // kW
   const onlyCCS = ref(true)
   const excludeTesla = ref(false) // Exclure les Superchargeurs Tesla
-  const avoidTolls = ref(false) // Éviter les péages
   const routeGeometry = ref(null)
   const routeInfo = ref(null)
   const alternativeRoutes = ref([]) // Itinéraires alternatifs
   const selectedRouteIndex = ref(0) // Index de l'itinéraire sélectionné
-  const tollAvoidanceSupported = ref(null) // null=non demandé, true=supporté, false=fallback silencieux
 
   const OPENCHARGE_API = 'https://api.openchargemap.io/v3/poi'
   const API_KEY = import.meta.env.VITE_OPENCHARGE_API_KEY
@@ -24,6 +22,10 @@ export function useChargers(position, heading, destination) {
   // Largeur du couloir "sur ma route" (indépendant du Rayon qui sert à la recherche
   // circulaire sans destination). On ne garde que les bornes réellement sur le trajet.
   const ROUTE_CORRIDOR_M = 5000 // 5 km de part et d'autre du tracé
+
+  // Sans destination, on ne relance la recherche que si l'on s'est déplacé de plus
+  // de cette distance (sinon chaque mise à jour GPS en roulant déclenche un appel API).
+  const REFETCH_DISTANCE_M = 2000
 
   // Connection type IDs mapping (compact mode doesn't include titles)
   const CONNECTION_TYPES = {
@@ -45,10 +47,70 @@ export function useChargers(position, heading, destination) {
     return CONNECTION_TYPES[conn.ConnectionTypeID] || 'Inconnu'
   }
 
+  const toCharger = (c, startPos) => {
+    const lat = c.AddressInfo?.Latitude
+    const lng = c.AddressInfo?.Longitude
+    return {
+      id: c.ID,
+      name: c.AddressInfo?.Title || 'Station sans nom',
+      address: c.AddressInfo?.AddressLine1 || '',
+      town: c.AddressInfo?.Town || '',
+      lat,
+      lng,
+      // Distance depuis la position de départ (pas depuis le point d'échantillonnage)
+      distance: haversineDistance(startPos.lat, startPos.lng, lat, lng),
+      numberOfPoints: c.NumberOfPoints || 0,
+      connections: c.Connections?.map(conn => ({
+        type: getConnectionType(conn),
+        typeId: conn.ConnectionTypeID,
+        power: conn.PowerKW,
+        quantity: conn.Quantity || 1
+      })) || [],
+      operator: c.OperatorInfo?.Title || 'Opérateur inconnu',
+      isOperational: c.StatusType?.IsOperational !== false,
+      usageCost: c.UsageCost || null,
+      detailsUrl: openChargeMapUrl(c.ID)
+    }
+  }
+
+  // Filtres appliqués côté API : sans eux, maxresults renvoie les N bornes les plus
+  // proches (souvent des bornes lentes en ville) et le filtre client n'en garde aucune.
+  const apiFilterParams = () => {
+    const params = {}
+    if (minPower.value > 0) params.minpowerkw = minPower.value
+    if (onlyCCS.value) params.connectiontypeid = '33,32'
+    return params
+  }
+
+  const fetchPois = async (lat, lng, distanceKm, maxResults) => {
+    const params = new URLSearchParams({
+      key: API_KEY,
+      output: 'json',
+      latitude: lat,
+      longitude: lng,
+      distance: distanceKm,
+      distanceunit: 'km',
+      maxresults: maxResults,
+      compact: false,
+      verbose: false,
+      ...apiFilterParams()
+    })
+    const response = await fetch(`${OPENCHARGE_API}?${params}`)
+    if (!response.ok) {
+      throw new Error('Erreur API OpenChargeMap')
+    }
+    return response.json()
+  }
+
+  // Numéro de la dernière requête bornes : une réponse plus ancienne arrivée en retard
+  // (ex. recherche autour de soi lancée juste avant de choisir une destination) est ignorée.
+  let chargersRequestId = 0
+  let lastFetchPos = null
 
   const fetchChargersAlongRoute = async (routeCoords, startPos) => {
     if (!routeCoords || routeCoords.length === 0) return
 
+    const requestId = ++chargersRequestId
     loading.value = true
     error.value = null
 
@@ -57,7 +119,7 @@ export function useChargers(position, heading, destination) {
         throw new Error('Clé API OpenChargeMap manquante')
       }
 
-      // Sample points along the route (every ~50km)
+      // Sample points along the route (~10 points)
       const samplePoints = []
       const step = Math.max(1, Math.floor(routeCoords.length / 10))
       for (let i = 0; i < routeCoords.length; i += step) {
@@ -68,143 +130,91 @@ export function useChargers(position, heading, destination) {
         samplePoints.push(routeCoords[routeCoords.length - 1])
       }
 
-      // Fetch chargers for each sample point
+      // Requêtes en parallèle : un trajet ≈ 11 appels, en série cela prenait plusieurs secondes
+      const results = await Promise.allSettled(
+        samplePoints.map(([lng, lat]) => fetchPois(lat, lng, 30, 50))
+      )
+      if (requestId !== chargersRequestId) return
+
+      const fulfilled = results.filter(r => r.status === 'fulfilled')
+      if (fulfilled.length === 0) {
+        throw new Error('Erreur API OpenChargeMap')
+      }
+
       const allChargers = new Map()
-
-      for (const [lng, lat] of samplePoints) {
-        const params = new URLSearchParams({
-          key: API_KEY,
-          output: 'json',
-          latitude: lat,
-          longitude: lng,
-          distance: 30,
-          distanceunit: 'km',
-          maxresults: 50,
-          compact: false,
-          verbose: false
-        })
-
-        const response = await fetch(`${OPENCHARGE_API}?${params}`)
-        if (!response.ok) continue
-
-        const data = await response.json()
-
+      for (const { value: data } of fulfilled) {
         for (const c of data) {
           if (!allChargers.has(c.ID)) {
-            const chargerLat = c.AddressInfo?.Latitude
-            const chargerLng = c.AddressInfo?.Longitude
-            // Calculate distance from user's start position, not from sample point
-            const distanceFromUser = haversineDistance(
-              startPos.lat, startPos.lng,
-              chargerLat, chargerLng
-            )
-            allChargers.set(c.ID, {
-              id: c.ID,
-              name: c.AddressInfo?.Title || 'Station sans nom',
-              address: c.AddressInfo?.AddressLine1 || '',
-              town: c.AddressInfo?.Town || '',
-              lat: chargerLat,
-              lng: chargerLng,
-              distance: distanceFromUser,
-              numberOfPoints: c.NumberOfPoints || 0,
-              connections: c.Connections?.map(conn => ({
-                type: getConnectionType(conn),
-                typeId: conn.ConnectionTypeID,
-                power: conn.PowerKW,
-                quantity: conn.Quantity || 1
-              })) || [],
-              operator: c.OperatorInfo?.Title || 'Opérateur inconnu',
-              isOperational: c.StatusType?.IsOperational !== false,
-              usageCost: c.UsageCost || null,
-              detailsUrl: `https://openchargemap.org/site/poi/details/${c.ID}`
-            })
+            allChargers.set(c.ID, toCharger(c, startPos))
           }
         }
       }
 
       chargers.value = Array.from(allChargers.values())
-
     } catch (e) {
-      error.value = e.message
+      if (requestId === chargersRequestId) error.value = e.message
     } finally {
-      loading.value = false
+      if (requestId === chargersRequestId) loading.value = false
     }
   }
 
   const fetchChargers = async (lat, lng) => {
+    const requestId = ++chargersRequestId
     loading.value = true
     error.value = null
+    lastFetchPos = { lat, lng }
 
     try {
       if (!API_KEY) {
         throw new Error('Clé API OpenChargeMap manquante. Créez un fichier .env avec VITE_OPENCHARGE_API_KEY')
       }
 
-      const params = new URLSearchParams({
-        key: API_KEY,
-        output: 'json',
-        latitude: lat,
-        longitude: lng,
-        distance: Math.round(searchRadius.value / 1000),
-        distanceunit: 'km',
-        maxresults: 100,
-        compact: false,
-        verbose: false
-      })
+      const data = await fetchPois(lat, lng, Math.round(searchRadius.value / 1000), 100)
+      if (requestId !== chargersRequestId) return
 
-      const response = await fetch(`${OPENCHARGE_API}?${params}`)
-
-      if (!response.ok) {
-        throw new Error('Erreur API OpenChargeMap')
-      }
-
-      const data = await response.json()
-
-      chargers.value = data.map(c => ({
-        id: c.ID,
-        name: c.AddressInfo?.Title || 'Station sans nom',
-        address: c.AddressInfo?.AddressLine1 || '',
-        town: c.AddressInfo?.Town || '',
-        lat: c.AddressInfo?.Latitude,
-        lng: c.AddressInfo?.Longitude,
-        distance: c.AddressInfo?.Distance * 1000,
-        numberOfPoints: c.NumberOfPoints || 0,
-        connections: c.Connections?.map(conn => ({
-          type: getConnectionType(conn),
-          typeId: conn.ConnectionTypeID,
-          power: conn.PowerKW,
-          quantity: conn.Quantity || 1
-        })) || [],
-        operator: c.OperatorInfo?.Title || 'Opérateur inconnu',
-        isOperational: c.StatusType?.IsOperational !== false,
-        usageCost: c.UsageCost || null,
-        chargemapUrl: `https://chargemap.com/map?lat=${c.AddressInfo?.Latitude}&lng=${c.AddressInfo?.Longitude}&zoom=18`
-      }))
-
+      chargers.value = data.map(c => toCharger(c, { lat, lng }))
     } catch (e) {
-      error.value = e.message
+      if (requestId === chargersRequestId) error.value = e.message
     } finally {
-      loading.value = false
+      if (requestId === chargersRequestId) loading.value = false
     }
   }
 
+  // Même principe pour l'itinéraire : si la destination change pendant le calcul OSRM,
+  // l'ancien résultat ne doit pas écraser le nouveau.
+  let routeRequestId = 0
+
+  const clearRoute = () => {
+    routeRequestId++
+    routeGeometry.value = null
+    routeInfo.value = null
+    alternativeRoutes.value = []
+    selectedRouteIndex.value = 0
+  }
+
   const fetchRouteToDestination = async (startPos, dest) => {
-    const result = await getRouteGeometry(startPos.lat, startPos.lng, dest.lat, dest.lng, {
-      avoidTolls: avoidTolls.value
-    })
-    tollAvoidanceSupported.value = result?.tollAvoidanceSupported ?? null
-    const routes = result?.routes
-    if (routes && routes.length > 0) {
-      alternativeRoutes.value = routes
-      selectedRouteIndex.value = 0
-      const selected = routes[0]
-      routeGeometry.value = selected.coordinates
-      routeInfo.value = {
-        distance: selected.distance,
-        duration: selected.duration
-      }
-      await fetchChargersAlongRoute(selected.coordinates, startPos)
+    const requestId = ++routeRequestId
+    loading.value = true
+    error.value = null
+
+    const routes = await getRouteGeometry(startPos.lat, startPos.lng, dest.lat, dest.lng)
+    if (requestId !== routeRequestId) return
+
+    if (!routes || routes.length === 0) {
+      loading.value = false
+      error.value = 'Itinéraire introuvable'
+      return
     }
+
+    alternativeRoutes.value = routes
+    selectedRouteIndex.value = 0
+    const selected = routes[0]
+    routeGeometry.value = selected.coordinates
+    routeInfo.value = {
+      distance: selected.distance,
+      duration: selected.duration
+    }
+    await fetchChargersAlongRoute(selected.coordinates, startPos)
   }
 
   const selectRoute = async (index) => {
@@ -259,34 +269,19 @@ export function useChargers(position, heading, destination) {
       )
     }
 
-    // Sort by distance from start
-    result.sort((a, b) => a.distance - b.distance)
-
-    return result
+    // Copie avant tri : sans filtre actif, result est chargers.value et sort()
+    // muterait l'état réactif depuis un computed.
+    return [...result].sort((a, b) => a.distance - b.distance)
   })
 
-  // Watch position changes (only when no destination)
-  let fetchTimeout = null
-  watch(position, (newPos) => {
-    if (!newPos || destination?.value) return
-    if (!Number.isFinite(newPos.lat) || !Number.isFinite(newPos.lng)) return
-
-    clearTimeout(fetchTimeout)
-    fetchTimeout = setTimeout(() => {
-      fetchChargers(newPos.lat, newPos.lng)
-    }, 1000)
-  }, { immediate: true })
-
-  onUnmounted(() => {
-    if (fetchTimeout) clearTimeout(fetchTimeout)
-  })
-
-  // Watch destination changes (only react to destination, not position)
+  // Réagit à un changement de destination (ou à la première position GPS si la
+  // destination a été choisie avant le fix : sans ça l'itinéraire n'était jamais calculé).
   let lastDestId = null
-  watch(destination, (dest) => {
+  const syncDestination = () => {
     const pos = position?.value
     if (!pos) return
 
+    const dest = destination?.value
     const destId = dest ? `${dest.lat}-${dest.lng}` : null
     if (destId === lastDestId) return
     lastDestId = destId
@@ -295,21 +290,58 @@ export function useChargers(position, heading, destination) {
       fetchRouteToDestination(pos, dest)
     } else {
       // Clear route when destination is cleared (sinon les tracés restent affichés)
-      routeGeometry.value = null
-      routeInfo.value = null
-      alternativeRoutes.value = []
-      selectedRouteIndex.value = 0
+      clearRoute()
       fetchChargers(pos.lat, pos.lng)
     }
+  }
+
+  let fetchTimeout = null
+  watch(position, (newPos) => {
+    if (!newPos) return
+    if (!Number.isFinite(newPos.lat) || !Number.isFinite(newPos.lng)) return
+
+    if (destination?.value) {
+      syncDestination()
+      return
+    }
+
+    if (lastFetchPos && haversineDistance(lastFetchPos.lat, lastFetchPos.lng, newPos.lat, newPos.lng) < REFETCH_DISTANCE_M) {
+      return
+    }
+
+    clearTimeout(fetchTimeout)
+    // Indiquer le chargement dès maintenant : sinon « Aucune borne » s'affiche pendant le debounce
+    loading.value = true
+    fetchTimeout = setTimeout(() => {
+      fetchChargers(newPos.lat, newPos.lng)
+    }, 1000)
+  }, { immediate: true })
+
+  watch(destination, syncDestination)
+
+  // Les filtres puissance/CCS/rayon sont envoyés à l'API : il faut relancer la recherche
+  // (sans recalculer l'itinéraire OSRM). Debounce pour le slider de rayon.
+  let filterTimeout = null
+  const refetchForFilters = () => {
+    clearTimeout(filterTimeout)
+    filterTimeout = setTimeout(() => {
+      const pos = position?.value
+      if (!pos) return
+      if (routeGeometry.value) {
+        fetchChargersAlongRoute(routeGeometry.value, pos)
+      } else {
+        fetchChargers(pos.lat, pos.lng)
+      }
+    }, 400)
+  }
+  watch([minPower, onlyCCS], refetchForFilters)
+  watch(searchRadius, () => {
+    if (!routeGeometry.value) refetchForFilters()
   })
 
-  // Recalculer l'itinéraire si on change l'option péages
-  watch(avoidTolls, () => {
-    const pos = position?.value
-    const dest = destination?.value
-    if (pos && dest) {
-      fetchRouteToDestination(pos, dest)
-    }
+  onUnmounted(() => {
+    clearTimeout(fetchTimeout)
+    clearTimeout(filterTimeout)
   })
 
   const refreshChargers = () => {
@@ -332,12 +364,10 @@ export function useChargers(position, heading, destination) {
     onlyCCS,
     excludeTesla,
     onlyOnRoute,
-    avoidTolls,
     routeGeometry,
     routeInfo,
     alternativeRoutes,
     selectedRouteIndex,
-    tollAvoidanceSupported,
     selectRoute,
     refreshChargers
   }

@@ -16,7 +16,6 @@ Application web (PWA) pour trouver les bornes de recharge rapide **CCS** sur vot
 Pour garder l'écran principal épuré, les réglages secondaires sont regroupés dans un panneau déroulant :
 - **Autonomie max** de la voiture
 - **Été / Hiver** (consommation 19 vs 25 kWh/100 km, −24 % d'autonomie en hiver)
-- **Péages** (évitement quand supporté par le routeur)
 - **Aller / Aller-retour**
 - **CCS uniquement**
 - **Sur ma route** (couloir de 5 km autour du tracé)
