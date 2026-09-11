@@ -10,7 +10,6 @@ const routeGeometry = inject('routeGeometry')
 const maxAutonomy = inject('maxAutonomy')
 const winterMode = inject('winterMode')
 const winterFactor = inject('winterFactor')
-const avoidTolls = inject('avoidTolls')
 const roundTripMode = inject('roundTripMode')
 const onlyCCS = inject('onlyCCS')
 const excludeTesla = inject('excludeTesla')
@@ -29,23 +28,27 @@ const downloadMapForOffline = async () => {
   }
 }
 
+// Chiffres uniquement ; la valeur n'est appliquée qu'à la validation (blur / Entrée).
+// L'appliquer à chaque touche faisait passer le max par « 3 » en tapant « 350 »,
+// ce qui ramenait l'autonomie restante à 3 km.
 const onMaxAutonomyInput = (e) => {
-  const val = parseInt(e.target.value)
-  if (!Number.isFinite(val)) return
-  maxAutonomy.value = val
-  // L'autonomie restante ne peut pas dépasser le max voiture
-  if (autonomy && autonomy.value > val) {
-    autonomy.value = val
-  }
+  const digits = e.target.value.replace(/\D/g, '').slice(0, 3)
+  if (e.target.value !== digits) e.target.value = digits
 }
 
-const onMaxAutonomyBlur = (e) => {
-  let val = parseInt(e.target.value)
-  if (!Number.isFinite(val)) val = 470
-  maxAutonomy.value = Math.min(Math.max(val, 100), 470)
+const commitMaxAutonomy = (e) => {
+  const val = parseInt(e.target.value)
+  maxAutonomy.value = Number.isFinite(val) ? Math.min(Math.max(val, 100), 470) : maxAutonomy.value
+  e.target.value = maxAutonomy.value
+  // L'autonomie restante ne peut pas dépasser le max voiture
   if (autonomy && autonomy.value > maxAutonomy.value) {
     autonomy.value = maxAutonomy.value
   }
+}
+
+const selectAll = (e) => {
+  const el = e.target
+  setTimeout(() => el.setSelectionRange(0, el.value.length), 0)
 }
 </script>
 
@@ -67,10 +70,13 @@ const onMaxAutonomyBlur = (e) => {
             inputmode="numeric"
             pattern="[0-9]*"
             maxlength="3"
+            enterkeyhint="done"
             :value="maxAutonomy"
             class="num-input"
             @input="onMaxAutonomyInput"
-            @blur="onMaxAutonomyBlur"
+            @focus="selectAll"
+            @blur="commitMaxAutonomy"
+            @keydown.enter.prevent="e => e.target.blur()"
           >
           <span class="num-unit">km</span>
         </div>
@@ -82,10 +88,6 @@ const onMaxAutonomyBlur = (e) => {
           <span class="toggle-icon">{{ winterMode ? '❄️' : '☀️' }}</span>
           <span class="toggle-label">{{ winterMode ? 'Hiver' : 'Été' }}</span>
           <span v-if="winterMode" class="toggle-sub">{{ winterPct }}%</span>
-        </button>
-        <button class="toggle toll" :class="{ active: avoidTolls }" @click="avoidTolls = !avoidTolls">
-          <span class="toggle-icon">🛣️</span>
-          <span class="toggle-label">{{ avoidTolls ? 'Gratuit' : 'Péages' }}</span>
         </button>
         <button class="toggle roundtrip" :class="{ active: roundTripMode }" @click="roundTripMode = !roundTripMode">
           <span class="toggle-icon">🔄</span>
@@ -270,12 +272,6 @@ const onMaxAutonomyBlur = (e) => {
 .toggle.winter.active {
   background: #3b82f6;
   border-color: #3b82f6;
-  color: white;
-}
-
-.toggle.toll.active {
-  background: #22c55e;
-  border-color: #22c55e;
   color: white;
 }
 

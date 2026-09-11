@@ -11,7 +11,8 @@ import DestinationSearch from './components/DestinationSearch.vue'
 import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
 import { version } from '../package.json'
 
-const activeTab = ref('map')
+// Raccourcis PWA du manifest : /?view=map et /?view=list
+const activeTab = ref(new URLSearchParams(window.location.search).get('view') === 'list' ? 'list' : 'map')
 const optionsOpen = ref(false)
 const focusStop = ref(null)
 
@@ -28,6 +29,7 @@ const {
   error: geoError,
   permissionDenied,
   isTracking,
+  signalLost,
   startTracking
 } = useGeolocation()
 
@@ -49,7 +51,6 @@ const {
   onlyCCS,
   excludeTesla,
   onlyOnRoute,
-  avoidTolls,
   routeGeometry,
   routeInfo,
   alternativeRoutes,
@@ -86,7 +87,6 @@ provide('maxAutonomy', maxAutonomy)
 provide('plannedStops', plannedStops)
 provide('winterMode', winterMode)
 provide('winterFactor', winterFactor)
-provide('avoidTolls', avoidTolls)
 provide('roundTripMode', roundTripMode)
 provide('alternativeRoutes', alternativeRoutes)
 provide('selectedRouteIndex', selectedRouteIndex)
@@ -121,9 +121,9 @@ startTracking()
         <span
           v-if="position"
           class="dot"
-          :class="{ active: isTracking }"
+          :class="{ active: isTracking && !signalLost, weak: signalLost }"
           role="status"
-          :aria-label="isTracking ? 'Suivi GPS actif' : 'Suivi GPS inactif'"
+          :aria-label="signalLost ? 'Signal GPS perdu, dernière position conservée' : isTracking ? 'Suivi GPS actif' : 'Suivi GPS inactif'"
         />
       </div>
     </header>
@@ -153,16 +153,17 @@ startTracking()
     />
 
     <main class="content">
-      <div v-if="permissionDenied" class="permission-help" role="alert">
+      <!-- Une fois une position connue, une erreur GPS ne masque plus la carte (signal perdu en tunnel) -->
+      <div v-if="!position && permissionDenied" class="permission-help" role="alert">
         <h2>📍 Localisation désactivée</h2>
         <p>{{ geoError }}</p>
         <p class="permission-hint">
           Active la géolocalisation dans les paramètres de ton navigateur, puis clique sur Réessayer.
-          Tu peux aussi saisir une destination ci-dessus pour planifier un trajet.
+          Elle sert de point de départ à la recherche et aux itinéraires.
         </p>
         <button class="retry-btn" @click="startTracking">Réessayer</button>
       </div>
-      <div v-else-if="geoError" class="error" role="alert" aria-live="assertive">
+      <div v-else-if="!position && geoError" class="error" role="alert" aria-live="assertive">
         {{ geoError }}
       </div>
       <div v-else-if="!position" class="loading" aria-live="polite">
@@ -326,6 +327,10 @@ select:focus:not(:focus-visible) {
 .dot.active {
   background: var(--primary);
   animation: pulse 2s infinite;
+}
+
+.dot.weak {
+  background: #f59e0b;
 }
 
 @keyframes pulse {

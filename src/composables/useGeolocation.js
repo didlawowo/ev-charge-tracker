@@ -7,6 +7,8 @@ export function useGeolocation() {
   const error = ref(null)
   const permissionDenied = ref(false)
   const isTracking = ref(false)
+  // Perte momentanée du signal (tunnel, parking) alors qu'une position est déjà connue
+  const signalLost = ref(false)
 
   let watchId = null
 
@@ -14,6 +16,12 @@ export function useGeolocation() {
     if (!navigator.geolocation) {
       error.value = 'La géolocalisation n\'est pas supportée par votre navigateur'
       return
+    }
+
+    // « Réessayer » ne doit pas empiler plusieurs watchers
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId)
+      watchId = null
     }
 
     isTracking.value = true
@@ -36,23 +44,29 @@ export function useGeolocation() {
 
         error.value = null
         permissionDenied.value = false
+        signalLost.value = false
+        isTracking.value = true
       },
       (err) => {
-        switch (err.code) {
-          case err.PERMISSION_DENIED:
-            error.value = 'Accès à la localisation refusé. Activez la géolocalisation dans les paramètres.'
-            permissionDenied.value = true
-            break
-          case err.POSITION_UNAVAILABLE:
-            error.value = 'Position non disponible'
-            break
-          case err.TIMEOUT:
-            error.value = 'Délai de localisation dépassé'
-            break
-          default:
-            error.value = 'Erreur de géolocalisation'
+        if (err.code === err.PERMISSION_DENIED) {
+          error.value = 'Accès à la localisation refusé. Activez la géolocalisation dans les paramètres.'
+          permissionDenied.value = true
+          isTracking.value = false
+          return
         }
-        isTracking.value = false
+
+        // TIMEOUT / POSITION_UNAVAILABLE sont transitoires : watchPosition continue
+        // d'essayer. Si on a déjà une position, on garde la carte affichée.
+        if (position.value) {
+          signalLost.value = true
+          return
+        }
+
+        error.value = err.code === err.TIMEOUT
+          ? 'Délai de localisation dépassé'
+          : err.code === err.POSITION_UNAVAILABLE
+            ? 'Position non disponible'
+            : 'Erreur de géolocalisation'
       },
       {
         enableHighAccuracy: true,
@@ -81,6 +95,7 @@ export function useGeolocation() {
     error,
     permissionDenied,
     isTracking,
+    signalLost,
     startTracking,
     stopTracking
   }

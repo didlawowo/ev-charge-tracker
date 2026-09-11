@@ -1,8 +1,8 @@
 <script setup>
-import { ref, inject, onMounted, watch } from 'vue'
+import { ref, inject, onMounted, onUnmounted, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { isCCSConnection, googleMapsUrl, appleMapsUrl } from '../utils'
+import { isCCSConnection, googleMapsUrl, appleMapsUrl, formatDistance, escapeHtml } from '../utils'
 
 const position = inject('position')
 const chargers = inject('chargers')
@@ -20,6 +20,7 @@ let destinationMarker = null
 let chargersLayer = null
 let chargerMarkers = {}
 let routeLayer = null
+let resizeObserver = null
 
 const userIcon = L.divIcon({
   className: 'user-marker',
@@ -102,6 +103,17 @@ onMounted(() => {
   }
   map.on('zoomend', updateMarkerScale)
   updateMarkerScale()
+
+  // Leaflet ne détecte pas seul les changements de taille (onglet Liste → Carte,
+  // bandeau d'itinéraire qui grandit) : sans invalidateSize, des zones grises apparaissent.
+  resizeObserver = new ResizeObserver(() => map?.invalidateSize())
+  resizeObserver.observe(mapContainer.value)
+})
+
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+  map?.remove()
+  map = null
 })
 
 // Watch route changes - affiche toutes les routes (alternatives en gris, sélectionnée en vert)
@@ -199,34 +211,35 @@ watch([chargers, plannedStops], ([newChargers, stops]) => {
     // N'afficher que les CCS
     const ccsConnections = getCCSConnections(charger.connections)
     const connectionsHtml = ccsConnections
-      .map(c => `<span class="conn-tag">${c.type}${c.power ? ` ${c.power}kW` : ''}</span>`)
+      .map(c => `<span class="conn-tag">${escapeHtml(c.type)}${c.power ? ` ${c.power}kW` : ''}</span>`)
       .slice(0, 3)
       .join('')
 
     // Afficher le prix si disponible
     const priceHtml = charger.usageCost
-      ? `<p class="price">${charger.usageCost}</p>`
+      ? `<p class="price">${escapeHtml(charger.usageCost)}</p>`
       : ''
 
     const gUrl = googleMapsUrl(position.value, charger, destination.value)
     const aUrl = appleMapsUrl(position.value, charger)
 
+    // Les champs OpenChargeMap sont saisis par des tiers : toujours échapper avant insertion HTML
     const popupContent = `
       <div class="popup">
-        <strong>${charger.name}</strong>
-        <p class="operator">${charger.operator}</p>
-        <p>${charger.address}</p>
+        <strong>${escapeHtml(charger.name)}</strong>
+        <p class="operator">${escapeHtml(charger.operator)}</p>
+        <p>${escapeHtml(charger.address)}</p>
         <div class="stats">
-          <span>${Math.round(charger.distance)}m</span>
+          <span>${formatDistance(charger.distance)}</span>
           <span>${charger.numberOfPoints} borne${charger.numberOfPoints > 1 ? 's' : ''}</span>
         </div>
         <div class="connections">${connectionsHtml}</div>
         ${priceHtml}
         <div class="popup-actions">
-          <a class="popup-btn google" href="${gUrl}" target="_blank" rel="noopener">Google Maps</a>
-          <a class="popup-btn apple" href="${aUrl}" target="_blank" rel="noopener">Plans</a>
+          <a class="popup-btn google" href="${escapeHtml(gUrl)}" target="_blank" rel="noopener">Google Maps</a>
+          <a class="popup-btn apple" href="${escapeHtml(aUrl)}" target="_blank" rel="noopener">Plans</a>
         </div>
-        <a href="${charger.detailsUrl}" target="_blank" rel="noopener">
+        <a href="${escapeHtml(charger.detailsUrl)}" target="_blank" rel="noopener">
           Voir la fiche ↗
         </a>
       </div>

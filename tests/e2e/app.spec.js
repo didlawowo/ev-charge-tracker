@@ -37,6 +37,12 @@ test.describe('EV Finder App', () => {
     await expect(page.locator('.map-container')).toBeVisible()
   })
 
+  test('should open the list view from the ?view=list PWA shortcut', async ({ page }) => {
+    await page.goto('/?view=list')
+    await expect(page.locator('.tabs button').last()).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('.list-view')).toBeVisible({ timeout: 10000 })
+  })
+
   test('should have a refresh button in the header', async ({ page }) => {
     await expect(page.locator('button[aria-label="Rafraîchir les bornes"]')).toBeVisible()
   })
@@ -86,15 +92,6 @@ test.describe('Options menu', () => {
 
     await winterToggle.click()
     await expect(winterToggle).not.toHaveClass(/active/)
-  })
-
-  test('should toggle toll avoidance', async ({ page }) => {
-    const tollToggle = page.locator('.toggle.toll')
-    await expect(tollToggle).toBeVisible()
-    await expect(tollToggle).not.toHaveClass(/active/)
-
-    await tollToggle.click()
-    await expect(tollToggle).toHaveClass(/active/)
   })
 
   test('should have a power filter', async ({ page }) => {
