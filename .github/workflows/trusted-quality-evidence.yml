@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: didlawowo/workflow-ci/.github/actions/checkout-source@v1.8.2
+      - uses: didlawowo/workflow-ci/.github/actions/checkout-source@v1.14.5
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -72,7 +72,7 @@ jobs:
 
   evidence:
     needs: [workflow-ci-ref-policy]
-    uses: didlawowo/workflow-ci/.github/workflows/quality-evidence.yml@v1.8.2
+    uses: didlawowo/workflow-ci/.github/workflows/quality-evidence.yml@v1.14.5
     with:
       repo-type: typescript
       runner: arc-runner-ev-charge-tracker
