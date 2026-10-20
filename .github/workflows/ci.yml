@@ -1,31 +1,31 @@
 name: CI
 
-# Runners : scale set ARC `arc-runner-ev-charge-tracker` dans le cluster (continuous-delivery,
-# ApplicationSet arc-runners). Les runners GitHub hébergés ne démarrent plus aucun
-# job depuis le 2026-09-10 (facturation du compte).
-
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
 
+# Pull requests opened from a fork are not executed on the self-hosted runners:
+# a fork could run arbitrary code on them. Maintainers run the checks on an
+# internal branch before merging (see CONTRIBUTING.md).
 jobs:
   lint:
     runs-on: arc-runner-ev-charge-tracker
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-          # Runner ARC éphémère : pas de cache npm côté GitHub, comme les autres
-          # dépôts du cluster (dc-home, solar-monitoring).
+          # Ephemeral runner: no persistent npm cache.
           package-manager-cache: false
       - run: npm ci
       - run: npm run lint
 
   build:
     runs-on: arc-runner-ev-charge-tracker
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -38,6 +38,7 @@ jobs:
   test-e2e:
     runs-on: arc-runner-ev-charge-tracker
     needs: build
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -45,15 +46,16 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - run: npm ci
-      # Build refait ici plutôt que de transférer l'artefact dist entre runners éphémères
+      # Build again here instead of transferring the dist artifact between
+      # ephemeral runners.
       - run: npm run build
-      - name: Install Playwright Browsers
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests
         run: npm run test
       - uses: actions/upload-artifact@v7
         if: failure()
-        # L'envoi d'artefact ne doit pas masquer le vrai résultat des tests
+        # Uploading the report must not hide the real test result.
         continue-on-error: true
         with:
           name: playwright-report
@@ -90,3 +92,33 @@ jobs:
         run: 'npm version patch -m "chore(release): bump version to %s [skip ci]"'
       - name: Push changes
         run: git push origin HEAD:main --follow-tags
+
+  release:
+    runs-on: arc-runner-ev-charge-tracker
+    needs: version-bump
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build
+      - name: Resolve release tag
+        run: echo "TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)" >> "$GITHUB_ENV"
+      - name: Package static build
+        run: tar -czf "dist-$TAG.tar.gz" -C dist .
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, nothing to do."
+          else
+            gh release create "$TAG" "dist-$TAG.tar.gz" --title "$TAG" --generate-notes
+          fi

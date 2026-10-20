@@ -2,6 +2,19 @@
   "name": "ev-charger-app",
   "private": true,
   "version": "1.0.47",
+  "description": "PWA mobile-first pour trouver les bornes de recharge CCS le long d'un trajet et planifier les arrêts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didlawowo/ev-charge-tracker.git"
+  },
+  "homepage": "https://github.com/didlawowo/ev-charge-tracker#readme",
+  "bugs": {
+    "url": "https://github.com/didlawowo/ev-charge-tracker/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +23,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "playwright test",
+    "pretest": "playwright install --with-deps chromium",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed"
   },
