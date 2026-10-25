@@ -1,7 +1,7 @@
 {
   "name": "ev-charger-app",
   "private": true,
-  "version": "1.0.50",
+  "version": "1.0.51",
   "description": "PWA mobile-first pour trouver les bornes de recharge CCS le long d'un trajet et planifier les arrêts",
   "license": "MIT",
   "repository": {
