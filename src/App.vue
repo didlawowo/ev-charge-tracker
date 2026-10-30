@@ -5,6 +5,7 @@ import { useChargers } from './composables/useChargers'
 import { useDestination } from './composables/useDestination'
 import { useTripPlanner } from './composables/useTripPlanner'
 import { useOfflineTrip } from './composables/useOfflineTrip'
+import { useStoredSetting } from './composables/useStoredSetting'
 import MapView from './components/MapView.vue'
 import ListView from './components/ListView.vue'
 import OptionsMenu from './components/OptionsMenu.vue'
@@ -16,6 +17,9 @@ import AppIcon from './components/AppIcon.js'
 const initialView = new URLSearchParams(window.location.search).get('view') === 'list' ? 'list' : 'map'
 const activeTab = ref(initialView)
 const optionsOpen = ref(false)
+const preferredNavigation = useStoredSetting('ev-finder:navigation-app', 'apple', value =>
+  ['apple', 'google'].includes(value) ? value : undefined
+)
 const focusStop = ref(null)
 
 // Clic sur un arrêt ou une borne de la liste : basculer sur la carte et la centrer dessus
@@ -46,7 +50,10 @@ const {
   isSearching,
   searchDestination,
   selectDestination,
-  clearDestination
+  clearDestination,
+  recentDestinations,
+  clearRecentDestinations,
+  removeRecentDestination
 } = useDestination()
 
 const {
@@ -136,6 +143,7 @@ provide('winterMode', winterMode)
 provide('winterFactor', winterFactor)
 provide('roundTripMode', roundTripMode)
 provide('maxChargeMinutes', maxChargeMinutes)
+provide('preferredNavigation', preferredNavigation)
 provide('alternativeRoutes', alternativeRoutes)
 provide('selectedRouteIndex', selectedRouteIndex)
 provide('refreshChargers', refreshChargers)
@@ -189,6 +197,7 @@ startTracking()
       :destination="destination"
       :destination-query="destinationQuery"
       :suggestions="suggestions"
+      :recent-destinations="recentDestinations"
       :is-searching="isSearching"
       :route-info="routeInfo"
       :autonomy="autonomy"
@@ -206,6 +215,8 @@ startTracking()
       @search="searchDestination"
       @select="selectDestination"
       @clear="clearDestination"
+      @clear-history="clearRecentDestinations"
+      @remove-history="removeRecentDestination"
       @update:autonomy="val => autonomy = val"
       @select-route="selectRoute"
       @resume-trip="resumeTrip"
