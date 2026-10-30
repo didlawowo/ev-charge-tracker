@@ -57,6 +57,8 @@ const place = computed(() => props.charger.town || props.charger.address)
         <span class="tags">
           <span v-if="stopNumber" class="tag stop">Arrêt {{ stopNumber }}</span>
           <span v-if="!charger.isOperational" class="tag off">Hors service</span>
+          <span v-if="charger.roadAccess === 'unknown'" class="tag off">Accès non vérifié</span>
+          <span v-if="charger.roadAccess === 'routable' && charger.roadDetourMinutes > 0" class="tag">Détour ≈ {{ charger.roadDetourMinutes }} min</span>
           <span v-if="charger.numberOfPoints" class="tag">{{ charger.numberOfPoints }} point{{ charger.numberOfPoints > 1 ? 's' : '' }}</span>
           <span v-if="charger.usageCost" class="tag price">{{ charger.usageCost }}</span>
         </span>
