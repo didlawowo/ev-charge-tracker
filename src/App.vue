@@ -40,6 +40,7 @@ const {
   permissionDenied,
   isTracking,
   signalLost,
+  getFreshPosition,
   startTracking
 } = useGeolocation()
 
@@ -73,7 +74,17 @@ const {
   selectRoute,
   restoreTrip,
   refreshChargers
-} = useChargers(position, heading, destination)
+} = useChargers(position, heading, destination, getFreshPosition)
+
+// Un trajet choisi de nouveau doit repartir du GPS actuel, même si la
+// destination est identique à celle qui était déjà sélectionnée.
+const selectDestinationAndRefresh = place => {
+  const previous = destination.value
+  selectDestination(place)
+  if (previous && previous.lat === place.lat && previous.lng === place.lng) {
+    refreshChargers()
+  }
+}
 
 const {
   autonomy,
@@ -213,7 +224,7 @@ startTracking()
       :selected-route-index="selectedRouteIndex"
       :saved-trip="savedTrip"
       @search="searchDestination"
-      @select="selectDestination"
+      @select="selectDestinationAndRefresh"
       @clear="clearDestination"
       @clear-history="clearRecentDestinations"
       @remove-history="removeRecentDestination"
