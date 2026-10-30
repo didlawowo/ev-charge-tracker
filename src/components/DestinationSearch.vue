@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onUnmounted } from 'vue'
 import AppIcon from './AppIcon.js'
 import AutonomyEditor from './AutonomyEditor.vue'
 import { formatSavedAt } from '../utils'
@@ -8,6 +8,7 @@ const props = defineProps({
   destination: { type: Object, default: null },
   destinationQuery: { type: String, default: '' },
   suggestions: { type: Array, default: () => [] },
+  recentDestinations: { type: Array, default: () => [] },
   isSearching: { type: Boolean, default: false },
   routeInfo: { type: Object, default: null },
   autonomy: { type: Number, default: 100 },
@@ -24,7 +25,7 @@ const props = defineProps({
   savedTrip: { type: Object, default: null }
 })
 
-const emit = defineEmits(['search', 'select', 'clear', 'update:autonomy', 'selectRoute', 'resumeTrip', 'forgetTrip'])
+const emit = defineEmits(['search', 'select', 'clear', 'clearHistory', 'removeHistory', 'update:autonomy', 'selectRoute', 'resumeTrip', 'forgetTrip'])
 
 const savedTripSummary = computed(() => {
   const trip = props.savedTrip
@@ -39,6 +40,30 @@ const savedTripSummary = computed(() => {
 
 const inputValue = ref(props.destinationQuery || '')
 let debounceTimeout = null
+let blurTimeout = null
+const searchFocused = ref(false)
+const hasTypedSinceFocus = ref(false)
+const recentMatches = computed(() => {
+  if (!searchFocused.value) return []
+  const query = hasTypedSinceFocus.value ? inputValue.value.toLocaleLowerCase('fr').trim() : ''
+  return props.recentDestinations.filter(place =>
+    !query || `${place.name} ${place.fullName || ''}`.toLocaleLowerCase('fr').includes(query)
+  ).slice(0, 10)
+})
+const showResults = computed(() => searchFocused.value && (recentMatches.value.length > 0 || props.suggestions.length > 0))
+const onFocus = () => {
+  if (blurTimeout) clearTimeout(blurTimeout)
+  hasTypedSinceFocus.value = false
+  searchFocused.value = true
+}
+const onBlur = () => {
+  // Sur iOS le focus saute brièvement lors d'un tap sur la suggestion.
+  blurTimeout = setTimeout(() => { searchFocused.value = false }, 180)
+}
+onUnmounted(() => {
+  clearTimeout(debounceTimeout)
+  clearTimeout(blurTimeout)
+})
 
 watch(() => props.destinationQuery, (val) => {
   inputValue.value = val
@@ -46,6 +71,7 @@ watch(() => props.destinationQuery, (val) => {
 
 const onInput = (e) => {
   inputValue.value = e.target.value
+  hasTypedSinceFocus.value = true
   clearTimeout(debounceTimeout)
   debounceTimeout = setTimeout(() => {
     emit('search', inputValue.value)
@@ -54,13 +80,17 @@ const onInput = (e) => {
 
 const onSelect = (place) => {
   clearTimeout(debounceTimeout)
+  clearTimeout(blurTimeout)
+  searchFocused.value = false
+  document.activeElement?.blur?.()
   emit('select', place)
 }
 
 // Entrée = première suggestion (clavier mobile « Rechercher »)
 const onEnter = (e) => {
-  if (props.suggestions.length > 0) {
-    onSelect(props.suggestions[0])
+  const firstPlace = recentMatches.value[0] || props.suggestions[0]
+  if (firstPlace) {
+    onSelect(firstPlace)
     e.target.blur()
   }
 }
@@ -68,6 +98,8 @@ const onEnter = (e) => {
 const onClear = () => {
   clearTimeout(debounceTimeout)
   inputValue.value = ''
+  hasTypedSinceFocus.value = false
+  searchFocused.value = true
   emit('search', '')
   emit('clear')
 }
@@ -125,12 +157,14 @@ const autonomyEditorOpen = ref(false)
             aria-label="Destination"
             aria-autocomplete="list"
             aria-controls="destination-suggestions"
-            :aria-expanded="suggestions.length > 0"
+            :aria-expanded="showResults"
             autocomplete="off"
             autocorrect="off"
             spellcheck="false"
             enterkeyhint="search"
             @input="onInput"
+            @focus="onFocus"
+            @blur="onBlur"
             @keydown.enter.prevent="onEnter"
           >
           <div v-if="isSearching" class="search-spinner" role="status" aria-label="Recherche en cours" />
@@ -172,27 +206,68 @@ const autonomyEditorOpen = ref(false)
         @close="autonomyEditorOpen = false"
       />
 
-      <ul
-        v-if="suggestions.length > 0"
+      <div
+        v-if="showResults"
         id="destination-suggestions"
         class="suggestions"
         role="listbox"
-        aria-label="Suggestions de destination"
+        aria-label="Destinations récentes et suggestions"
       >
-        <li v-for="place in suggestions" :key="place.id" role="presentation">
-          <button type="button" role="option" class="suggestion-item" @click="onSelect(place)">
+        <div v-if="recentMatches.length > 0" class="suggestion-section">
+          <div class="suggestions-heading">
+            <span>Destinations récentes</span>
+            <button type="button" class="history-clear" @mousedown.prevent @click="emit('clearHistory')">
+              Tout effacer
+            </button>
+          </div>
+          <div v-for="place in recentMatches" :key="`recent-${place.name}-${place.lat}-${place.lng}`" class="history-row">
+            <button
+              type="button"
+              role="option"
+              class="suggestion-item history-select"
+              @mousedown.prevent
+              @click="onSelect(place)"
+            >
+              <AppIcon name="clock" :size="18" class="suggestion-icon" />
+              <span class="suggestion-text">
+                <strong>{{ splitPlace(place.name).main }}</strong>
+                <span v-if="splitPlace(place.name).sub">{{ splitPlace(place.name).sub }}</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="history-remove"
+              :aria-label="`Supprimer ${place.name} de l'historique`"
+              @mousedown.prevent
+              @click="emit('removeHistory', place)"
+            >
+              <AppIcon name="x" :size="16" />
+            </button>
+          </div>
+        </div>
+        <div v-if="suggestions.length > 0" class="suggestion-section">
+          <div v-if="recentMatches.length" class="suggestions-heading">Résultats</div>
+          <button
+            v-for="place in suggestions"
+            :key="`search-${place.id}-${place.lat}-${place.lng}`"
+            type="button"
+            role="option"
+            class="suggestion-item"
+            @mousedown.prevent
+            @click="onSelect(place)"
+          >
             <AppIcon name="pin" :size="18" class="suggestion-icon" />
             <span class="suggestion-text">
               <strong>{{ splitPlace(place.name).main }}</strong>
               <span v-if="splitPlace(place.name).sub">{{ splitPlace(place.name).sub }}</span>
             </span>
           </button>
-        </li>
-      </ul>
+        </div>
+      </div>
     </div>
 
     <div
-      v-if="savedTripSummary && !destination && !inputValue && suggestions.length === 0"
+      v-if="savedTripSummary && !destination && !inputValue && !showResults"
       class="resume-trip"
     >
       <button type="button" class="resume-main" @click="emit('resumeTrip')">
@@ -429,8 +504,47 @@ const autonomyEditorOpen = ref(false)
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow);
-  max-height: 50vh;
+  max-height: min(50dvh, 410px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.suggestions-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.history-clear {
+  min-height: 36px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.history-row {
+  display: flex;
+  align-items: stretch;
+}
+.history-select {
+  flex: 1;
+  min-width: 0;
+}
+.history-remove {
+  width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .suggestion-item {
