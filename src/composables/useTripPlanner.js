@@ -1,11 +1,17 @@
 import { ref, computed } from 'vue'
-import { haversineDistance } from '../utils'
+import { haversineDistance, maxCcsPower } from '../utils'
+import { useStoredSetting } from './useStoredSetting'
 
 export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
   const autonomy = ref(100) // km - autonomie RESTANTE actuelle
   const maxAutonomy = ref(470) // km - autonomie MAX de la voiture (100%)
   const winterMode = ref(false) // Mode hiver (consommation plus élevée)
   const roundTripMode = ref(false) // Mode aller-retour
+  // Durée maximum autorisée par arrêt, conservée entre les ouvertures de la PWA.
+  const maxChargeMinutes = useStoredSetting('ev-finder:max-charge-minutes', 25, value => {
+    const minutes = Number(value)
+    return [10, 15, 20, 25, 30, 40, 45, 60].includes(minutes) ? minutes : undefined
+  })
   const chargeTarget = 0.80 // On recharge jusqu'à 80% (optimal sur borne rapide)
   const safetyMargin = 0.10 // 10% de marge de sécurité (on s'arrête à 10% restant)
   const showChargersThreshold = 0.70 // Afficher les bornes à partir de 70% d'autonomie utilisée (30% restant)
@@ -28,6 +34,18 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
   const rangeAfterCharge = computed(() => {
     return maxAutonomy.value * chargeTarget * (1 - safetyMargin) * winterFactor.value
   })
+
+  // Approximation prudente de la vitesse de recharge utilisable :
+  // la puissance annoncée (pic de la borne) n'est pas la puissance moyenne réelle.
+  // La courbe de charge, la température et le SoC réels restent inconnus.
+  // Plafond véhicule conservateur de 150 kW, moyenne à 65 % du pic.
+  const chargingKmPerMinute = charger => {
+    const peakKw = maxCcsPower(charger)
+    if (!peakKw || !Number.isFinite(peakKw)) return 0
+    const averageKw = Math.min(peakKw, 150) * 0.65
+    const consumption = winterMode.value ? winterConsumption : normalConsumption
+    return averageKw * (1 - safetyMargin) * 100 / (60 * consumption)
+  }
 
   // Calcule la distance d'un point depuis le départ le long de la route
   const getDistanceAlongRoute = (chargerLat, chargerLng, routeCoords) => {
@@ -82,23 +100,47 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
     })).filter(c => c.distanceFromStart < Infinity && c.distanceFromStart > 0)
       .sort((a, b) => a.distanceFromStart - b.distanceFromStart)
 
-    // Algorithme glouton pour sélectionner les arrêts
+    // Chaque arrêt est plafonné en minutes, et NON supposé atteindre 80 %
+    // automatiquement. On choisit la borne atteignable qui donne la meilleure
+    // portée après recharge (sa distance et sa puissance entrent en jeu).
     const stops = []
     let currentPosition = 0 // km depuis le départ
-    let availableRange = currentRange // On démarre avec l'autonomie restante actuelle
+    let availableRange = currentRange // km utilisables avant la prochaine recharge
 
-    while (currentPosition + availableRange < totalDistance) {
-      // Chercher la borne la plus loin qu'on peut atteindre
-      const reachableChargers = chargersWithDistance.filter(c =>
-        c.distanceFromStart > currentPosition &&
-        c.distanceFromStart <= currentPosition + availableRange
-      )
+    while (currentPosition + availableRange < totalDistance && stops.length < chargersWithDistance.length) {
+      const currentReach = currentPosition + availableRange
 
-      if (reachableChargers.length === 0) {
-        // Pas de borne atteignable - essayer de trouver la plus proche
-        const nextCharger = chargersWithDistance.find(c => c.distanceFromStart > currentPosition)
+      const candidates = chargersWithDistance
+        .filter(c => c.isOperational !== false &&
+          c.distanceFromStart > currentPosition &&
+          c.distanceFromStart <= currentReach)
+        .map(charger => {
+          const kmPerMinute = chargingKmPerMinute(charger)
+          const rangeAtArrival = Math.max(0, availableRange - (charger.distanceFromStart - currentPosition))
+          const limitAt80Pct = Math.max(maxRange, rangeAtArrival)
+          const rangeAfterCharge = Math.min(
+            limitAt80Pct,
+            rangeAtArrival + kmPerMinute * maxChargeMinutes.value
+          )
+          return {
+            charger,
+            kmPerMinute,
+            rangeAtArrival,
+            potentialReach: charger.distanceFromStart + rangeAfterCharge
+          }
+        })
+        .filter(c => c.kmPerMinute > 0 && c.potentialReach > currentReach + 0.01)
+        .sort((a, b) => b.potentialReach - a.potentialReach ||
+          b.charger.distanceFromStart - a.charger.distanceFromStart)
+
+      const best = candidates[0]
+      if (!best) {
+        // Aucune solution faisable avec le temps de charge choisi : NE PAS
+        // promettre un trajet en supposant une recharge illimitée.
+        const nextCharger = chargersWithDistance.find(c =>
+          c.isOperational !== false && c.distanceFromStart > currentReach
+        )
         if (nextCharger) {
-          // Indiquer qu'on ne peut pas l'atteindre mais c'est la plus proche
           stops.push({
             ...nextCharger,
             stopNumber: stops.length + 1,
@@ -106,28 +148,36 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
             remainingDistance: totalDistance - nextCharger.distanceFromStart,
             unreachable: true
           })
+        } else if (stops.length > 0) {
+          stops[stops.length - 1].unreachable = true
         }
         break
       }
 
-      // Prendre la borne la plus loin (optimise le nombre d'arrêts)
-      const bestCharger = reachableChargers[reachableChargers.length - 1]
-
-      // Garde-fou : si la "meilleure" borne ne fait pas avancer
-      // (coordonnées dupliquées ou erreur de tri), on évite la boucle infinie.
-      if (bestCharger.distanceFromStart <= currentPosition) {
-        break
-      }
+      const { charger, kmPerMinute, rangeAtArrival, potentialReach } = best
+      const limitAt80Pct = Math.max(maxRange, rangeAtArrival)
+      // Dernier arrêt : seulement le temps nécessaire pour finir le trajet.
+      // Autres arrêts : on autorise le maximum pour garder une marge en aval.
+      const requiredGain = potentialReach >= totalDistance
+        ? Math.max(0, totalDistance - charger.distanceFromStart - rangeAtArrival)
+        : Math.max(0, limitAt80Pct - rangeAtArrival)
+      const chargeMinutes = Math.min(maxChargeMinutes.value, Math.ceil(requiredGain / kmPerMinute))
+      const rangeAfterCharge = Math.min(
+        limitAt80Pct,
+        rangeAtArrival + chargeMinutes * kmPerMinute
+      )
 
       stops.push({
-        ...bestCharger,
+        ...charger,
         stopNumber: stops.length + 1,
-        distanceFromPrevious: bestCharger.distanceFromStart - currentPosition,
-        remainingDistance: totalDistance - bestCharger.distanceFromStart
+        distanceFromPrevious: charger.distanceFromStart - currentPosition,
+        remainingDistance: totalDistance - charger.distanceFromStart,
+        chargeMinutes,
+        rangeAfterCharge
       })
 
-      currentPosition = bestCharger.distanceFromStart
-      availableRange = maxRange // Après recharge, on repart avec l'autonomie MAX
+      currentPosition = charger.distanceFromStart
+      availableRange = rangeAfterCharge
     }
 
     return stops
@@ -135,6 +185,9 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
 
   // Nombre d'arrêts nécessaires
   const stopsNeeded = computed(() => plannedStops.value.length)
+  const totalChargingMinutes = computed(() => plannedStops.value.reduce(
+    (total, stop) => total + (stop.unreachable ? 0 : (stop.chargeMinutes || 0)), 0
+  ))
 
   // Est-ce que le trajet est faisable?
   const isTripFeasible = computed(() => {
@@ -143,9 +196,10 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
     const totalDistance = routeInfo.value.distance / 1000
     if (totalDistance <= currentUsableRange.value) return true
 
-    // Vérifier qu'on a assez de bornes pour faire le trajet
-    return plannedStops.value.length > 0 ||
-      totalDistance <= currentUsableRange.value
+    const stops = plannedStops.value
+    if (stops.length === 0 || stops.some(stop => stop.unreachable)) return false
+    const last = stops[stops.length - 1]
+    return last.distanceFromStart + last.rangeAfterCharge >= totalDistance - 0.01
   })
 
   // Analyse du trajet aller-retour
@@ -243,6 +297,8 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
     maxAutonomy,
     winterMode,
     roundTripMode,
+    maxChargeMinutes,
+    totalChargingMinutes,
     winterFactor,
     safetyMargin,
     currentUsableRange,
