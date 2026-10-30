@@ -1,7 +1,7 @@
 <script setup>
 import { ref, inject } from 'vue'
 import AppIcon from './AppIcon.js'
-import { googleMapsUrl, maxCcsPower } from '../utils'
+import { navigationUrl, navigationLabel, maxCcsPower } from '../utils'
 
 defineProps({
   stops: { type: Array, required: true }
@@ -9,8 +9,7 @@ defineProps({
 
 const emit = defineEmits(['focus'])
 
-const position = inject('position', ref(null))
-const destination = inject('destination', ref(null))
+const preferredNavigation = inject('preferredNavigation', ref('apple'))
 
 const expanded = ref(true)
 </script>
@@ -48,22 +47,25 @@ const expanded = ref(true)
           <span class="stop-info">
             <strong>{{ stop.name }}</strong>
             <span class="stop-details">
-              Km {{ Math.round(stop.distanceFromStart) }}<template v-if="maxCcsPower(stop)"> · {{ maxCcsPower(stop) }} kW</template> · {{ stop.operator }}
+              Km {{ Math.round(stop.distanceFromStart) }}<template v-if="maxCcsPower(stop)"> · {{ maxCcsPower(stop) }} kW</template> · {{ stop.operator }}<template v-if="!stop.unreachable && stop.chargeMinutes"> · ≈ {{ stop.chargeMinutes }} min</template>
             </span>
-            <span v-if="stop.unreachable" class="stop-warning">Au-delà de l'autonomie restante</span>
+            <span v-if="stop.unreachable" class="stop-warning">Trajet non réalisable avec cette limite de recharge</span>
           </span>
         </button>
         <a
           class="stop-nav"
-          :href="googleMapsUrl(position, stop, destination)"
+          :href="navigationUrl(preferredNavigation, stop)"
           target="_blank"
           rel="noopener"
-          :aria-label="`Itinéraire Google Maps via ${stop.name}`"
+          :aria-label="`Itinéraire ${navigationLabel(preferredNavigation)} vers ${stop.name}`"
         >
           <AppIcon name="navigation" :size="20" />
         </a>
       </li>
     </ol>
+    <p v-if="expanded && stops.length" class="maps-note">
+      L'application de navigation choisie calcule indépendamment l'heure d'arrivée. EV Finder limite les recharges à la durée configurée.
+    </p>
   </section>
 </template>
 
@@ -201,6 +203,13 @@ const expanded = ref(true)
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--warning);
+}
+
+.maps-note {
+  padding: 2px 16px 12px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
 }
 
 .stop-nav {
