@@ -9,6 +9,7 @@ const props = defineProps({
   destinationQuery: { type: String, default: '' },
   suggestions: { type: Array, default: () => [] },
   recentDestinations: { type: Array, default: () => [] },
+  accessUnverified: { type: Boolean, default: false },
   isSearching: { type: Boolean, default: false },
   routeInfo: { type: Object, default: null },
   autonomy: { type: Number, default: 100 },
@@ -134,6 +135,7 @@ const tripStatus = computed(() => {
     }
   }
   if (props.loading) return null
+  if (props.accessUnverified) return { kind: 'warn', label: 'Accès des bornes à vérifier' }
   return { kind: 'warn', label: 'Aucune borne atteignable' }
 })
 
