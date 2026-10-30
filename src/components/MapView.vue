@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import {
   isCCSConnection,
   isTeslaCharger,
+  haversineDistance,
   navigationUrl,
   navigationLabel,
   maxCcsPower,
@@ -45,6 +46,8 @@ let chargerMarkers = {}
 let routeLayer = null
 let routeBounds = null
 let resizeObserver = null
+let followUser = true
+let lastCameraPosition = null
 
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>'
 
@@ -182,6 +185,7 @@ const renderDestination = () => {
   } else if (position?.value) {
     // Destination effacée : recentrer sur la position GPS d'origine
     map.setView([position.value.lat, position.value.lng], 13)
+    lastCameraPosition = { lat: position.value.lat, lng: position.value.lng }
   }
 }
 
@@ -254,6 +258,9 @@ onMounted(() => {
     else if (z < 12) scale = 0.4 + (z - 6) * (0.6 / 6)
     mapContainer.value.style.setProperty('--marker-scale', scale.toFixed(2))
   }
+  // Le conducteur peut déplacer librement la carte. Le bouton de recentrage
+  // réactive le suivi sans lui imposer un pan dès qu'il consulte une borne.
+  map.on('dragstart', () => { followUser = false })
   map.on('zoomend', updateMarkerScale)
   updateMarkerScale()
 
@@ -310,6 +317,16 @@ watch(position, (pos) => {
     userMarker = L.marker([pos.lat, pos.lng], { icon: userIcon, zIndexOffset: 800 }).addTo(map)
     map.setView([pos.lat, pos.lng], 13)
   }
+
+  if (followUser) {
+    const previous = lastCameraPosition
+    const moved = !previous || haversineDistance(previous.lat, previous.lng, pos.lat, pos.lng) > 300
+    const onScreen = map.getBounds().pad(-0.20).contains([pos.lat, pos.lng])
+    if (moved || !onScreen) {
+      map.panTo([pos.lat, pos.lng], { animate: false })
+      lastCameraPosition = { lat: pos.lat, lng: pos.lng }
+    }
+  }
 })
 
 watch([chargers, plannedStops], renderChargers)
@@ -319,6 +336,7 @@ watch(focusStop, async (stop) => {
   if (!map || !stop) return
   // Venant de l'onglet Liste, la carte vient juste d'être réaffichée
   await nextTick()
+  followUser = false
   map.invalidateSize()
   map.setView([stop.lat, stop.lng], 15, { animate: false })
   // Remonter la borne au-dessus du panneau des arrêts
@@ -332,6 +350,8 @@ const onSheetFocus = (stop) => {
 
 const centerOnUser = () => {
   if (map && position.value) {
+    followUser = true
+    lastCameraPosition = { lat: position.value.lat, lng: position.value.lng }
     map.setView([position.value.lat, position.value.lng], 14)
   }
 }
