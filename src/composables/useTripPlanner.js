@@ -92,7 +92,9 @@ export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
     }
 
     const routeCoords = routeGeometry.value
-    const chargers = filteredChargers.value
+    // Ne planifier QUE les bornes dont l'accès routier dans notre sens a été
+    // vérifié. Les bornes 'unknown' restent visibles mais ne sont pas utilisées.
+    const chargers = filteredChargers.value.filter(c => c.roadAccess === 'routable')
 
     // Enrichir les bornes avec leur distance depuis le départ
     const chargersWithDistance = chargers.map(c => ({
