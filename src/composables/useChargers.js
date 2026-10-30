@@ -1,6 +1,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { getRouteGeometry, isPointNearRoute } from './useRoute'
 import { isCCSConnection, haversineDistance, isTeslaCharger, openChargeMapUrl } from '../utils'
+import { useStoredSetting } from './useStoredSetting'
 
 export function useChargers(position, heading, destination) {
   const chargers = ref([])
@@ -10,7 +11,12 @@ export function useChargers(position, heading, destination) {
   const onlyOnRoute = ref(true)
   const minPower = ref(100) // kW
   const onlyCCS = ref(true)
-  const excludeTesla = ref(false) // Exclure les Superchargeurs Tesla
+  // Exclure Tesla dès le premier lancement ; l'utilisateur peut réactiver le réseau.
+  const excludeTesla = useStoredSetting('ev-finder:exclude-tesla', true, value => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return undefined
+  })
   const routeGeometry = ref(null)
   const routeInfo = ref(null)
   const alternativeRoutes = ref([]) // Itinéraires alternatifs
