@@ -209,6 +209,7 @@ startTracking()
       :destination-query="destinationQuery"
       :suggestions="suggestions"
       :recent-destinations="recentDestinations"
+      :access-unverified="Boolean(routeGeometry && relevantChargers.some(c => c.roadAccess === 'unknown'))"
       :is-searching="isSearching"
       :route-info="routeInfo"
       :autonomy="autonomy"
