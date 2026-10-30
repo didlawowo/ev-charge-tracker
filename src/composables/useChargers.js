@@ -2,6 +2,7 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { getRouteGeometry, isPointNearRoute } from './useRoute'
 import { isCCSConnection, haversineDistance, isTeslaCharger, openChargeMapUrl } from '../utils'
 import { useStoredSetting } from './useStoredSetting'
+import { verifyChargerRoadAccess } from './useRouteAccess'
 
 export function useChargers(position, heading, destination, getFreshPosition = null) {
   const chargers = ref([])
@@ -156,7 +157,15 @@ export function useChargers(position, heading, destination, getFreshPosition = n
         }
       }
 
-      chargers.value = Array.from(allChargers.values())
+      const found = Array.from(allChargers.values())
+      // Valider les accès depuis notre sens de circulation : la distance
+      // géométrique à l'autoroute ne suffit pas pour recommander une aire.
+      const access = await verifyChargerRoadAccess(routeCoords, found)
+      if (requestId !== chargersRequestId) return
+      chargers.value = found.map(charger => ({
+        ...charger,
+        ...access.get(charger.id)
+      }))
     } catch (e) {
       if (requestId === chargersRequestId) error.value = e.message
     } finally {
@@ -301,13 +310,15 @@ export function useChargers(position, heading, destination, getFreshPosition = n
       result = result.filter(c => !isTeslaCharger(c))
     }
 
-    // Filter by route proximity if enabled and we have a route
-    // On utilise un couloir étroit fixe (pas le Rayon, trop large) pour ne garder
-    // que les bornes réellement sur le trajet sélectionné.
-    if (onlyOnRoute.value && routeGeometry.value) {
-      result = result.filter(c =>
-        isPointNearRoute(c.lat, c.lng, routeGeometry.value, ROUTE_CORRIDOR_M)
-      )
+    // Une aire de l'autre sens (détour important) ne doit pas être
+    // recommandée, même lorsqu'elle se trouve à quelques mètres du tracé.
+    if (routeGeometry.value) {
+      result = result.filter(c => c.roadAccess !== 'detour')
+      if (onlyOnRoute.value) {
+        result = result.filter(c =>
+          isPointNearRoute(c.lat, c.lng, routeGeometry.value, ROUTE_CORRIDOR_M)
+        )
+      }
     }
 
     // Copie avant tri : sans filtre actif, result est chargers.value et sort()
