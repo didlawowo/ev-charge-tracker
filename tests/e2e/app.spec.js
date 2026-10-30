@@ -344,4 +344,25 @@ test.describe('Double-tap iPhone', () => {
     await page.waitForTimeout(3300)
     await expect(page.locator('.install-banner')).toHaveCount(0)
   })
+
+  test('deux taps rapides sur -10 passent de 70 à 50 km sans zoom', async ({ page, context }) => {
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation(PARIS)
+    await page.goto('/')
+    await page.locator('.map-container').waitFor()
+
+    await page.locator('.autonomy-field').tap()
+    await page.locator('.autonomy-input').fill('70')
+    const button = await page.locator('.step-btn[aria-label="Retirer 10 km"]').boundingBox()
+    const x = button.x + button.width / 2
+    const y = button.y + button.height / 2
+    await page.touchscreen.tap(x, y)
+    await page.touchscreen.tap(x, y)
+
+    await expect(page.locator('.autonomy-input')).toHaveValue('50')
+    await page.locator('.confirm-btn').tap()
+    await expect(page.locator('.autonomy-number')).toHaveText('50')
+    await expect(page.locator('.header')).toBeVisible()
+    await expect(page.locator('.tabs')).toBeVisible()
+  })
 })
