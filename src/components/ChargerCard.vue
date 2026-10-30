@@ -1,6 +1,6 @@
 <script setup>
 import { computed, inject, ref } from 'vue'
-import { googleMapsUrl, appleMapsUrl, maxCcsPower, formatDistance } from '../utils'
+import { navigationUrl, navigationLabel, maxCcsPower, formatDistance } from '../utils'
 import AppIcon from './AppIcon.js'
 
 const props = defineProps({
@@ -10,17 +10,12 @@ const props = defineProps({
   }
 })
 
-const position = inject('position', ref(null))
-const destination = inject('destination', ref(null))
+const preferredNavigation = inject('preferredNavigation', ref('apple'))
 const plannedStops = inject('plannedStops', ref([]))
 const focusOnMap = inject('focusOnMap', null)
 
-const googleUrl = computed(() =>
-  googleMapsUrl(position.value, props.charger, destination.value)
-)
-const appleUrl = computed(() =>
-  appleMapsUrl(position.value, props.charger)
-)
+const navUrl = computed(() => navigationUrl(preferredNavigation.value, props.charger))
+const navLabel = computed(() => navigationLabel(preferredNavigation.value))
 
 const maxPower = computed(() => maxCcsPower(props.charger))
 
@@ -71,11 +66,10 @@ const place = computed(() => props.charger.town || props.charger.address)
     </button>
 
     <div class="card-actions">
-      <a :href="googleUrl" target="_blank" rel="noopener" class="action primary">
+      <a :href="navUrl" target="_blank" rel="noopener" class="action primary">
         <AppIcon name="navigation" :size="15" />
-        Google Maps
+        {{ navLabel }}
       </a>
-      <a :href="appleUrl" target="_blank" rel="noopener" class="action">Plans</a>
       <a
         :href="charger.detailsUrl"
         target="_blank"
