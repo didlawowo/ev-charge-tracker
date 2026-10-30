@@ -1,11 +1,12 @@
 import { ref, computed } from 'vue'
 import { haversineDistance, maxCcsPower } from '../utils'
 import { useStoredSetting } from './useStoredSetting'
+import { useSeasonalWinterMode } from './useSeasonalWinterMode'
 
 export function useTripPlanner(filteredChargers, routeGeometry, routeInfo) {
   const autonomy = ref(100) // km - autonomie RESTANTE actuelle
   const maxAutonomy = ref(470) // km - autonomie MAX de la voiture (100%)
-  const winterMode = ref(false) // Mode hiver (consommation plus élevée)
+  const { winterMode } = useSeasonalWinterMode() // Novembre à mars par défaut, ajustable dans Options
   const roundTripMode = ref(false) // Mode aller-retour
   // Durée maximum autorisée par arrêt, conservée entre les ouvertures de la PWA.
   const maxChargeMinutes = useStoredSetting('ev-finder:max-charge-minutes', 25, value => {
