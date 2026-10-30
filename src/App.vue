@@ -73,6 +73,8 @@ const {
   maxAutonomy,
   winterMode,
   roundTripMode,
+  maxChargeMinutes,
+  totalChargingMinutes,
   winterFactor,
   currentUsableRange,
   plannedStops,
@@ -133,6 +135,7 @@ provide('plannedStops', plannedStops)
 provide('winterMode', winterMode)
 provide('winterFactor', winterFactor)
 provide('roundTripMode', roundTripMode)
+provide('maxChargeMinutes', maxChargeMinutes)
 provide('alternativeRoutes', alternativeRoutes)
 provide('selectedRouteIndex', selectedRouteIndex)
 provide('refreshChargers', refreshChargers)
@@ -195,6 +198,8 @@ startTracking()
       :round-trip-mode="roundTripMode"
       :round-trip-analysis="roundTripAnalysis"
       :planned-stops="plannedStops"
+      :total-charging-minutes="totalChargingMinutes"
+      :max-charge-minutes="maxChargeMinutes"
       :alternative-routes="alternativeRoutes"
       :selected-route-index="selectedRouteIndex"
       :saved-trip="savedTrip"
