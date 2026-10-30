@@ -270,12 +270,12 @@ test.describe('Planification avec plafond de recharge', () => {
         }],
         chargers: [
           {
-            id: 1, name: 'Borne A', operator: 'Ionity',
+            id: 1, name: 'Borne A', operator: 'Ionity', roadAccess: 'routable',
             lat: 46.7, lng: 2.3522, distance: 80000, isOperational: true,
             connections: [{ type: 'CCS', typeId: 33, power: 150 }]
           },
           {
-            id: 2, name: 'Borne B', operator: 'Ionity',
+            id: 2, name: 'Borne B', operator: 'Ionity', roadAccess: 'routable',
             lat: 48.3, lng: 2.3522, distance: 260000, isOperational: true,
             connections: [{ type: 'CCS', typeId: 33, power: 150 }]
           },
@@ -299,7 +299,7 @@ test.describe('Planification avec plafond de recharge', () => {
     expect(durations).toHaveLength(2)
     expect(durations.every(min => Number.isFinite(min) && min > 0 && min <= 25)).toBeTruthy()
     await expect(page.locator('.charge-time-hint')).toContainText('25 min max')
-    await expect(page.locator('.maps-note')).toContainText('Google Maps calcule indépendamment')
+    await expect(page.locator('.maps-note')).toContainText('navigation choisie calcule indépendamment')
     expect((await page.locator('.stop-item').allTextContents()).every(text => !text.includes('Tesla'))).toBeTruthy()
   })
 
