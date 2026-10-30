@@ -19,7 +19,7 @@ let openedAt = 0
 // iOS (Firefox/Brave inclus) peut conserver un décalage du viewport après
 // disparition du clavier : recaler l'application une fois l'éditeur fermé.
 const restoreViewport = () => {
-  if (window.scrollX || window.scrollY) window.scrollTo(0, 0)
+  window.scrollTo(0, 0)
 }
 
 const closeEditor = () => {
