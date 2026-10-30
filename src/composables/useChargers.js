@@ -439,7 +439,7 @@ export function useChargers(position, heading, destination, getFreshPosition = n
   const refreshChargers = () => {
     if (position.value) {
       if (destination?.value) {
-        fetchRouteToDestination(position.value, destination.value)
+        fetchRouteToDestination(position.value, destination.value, { forceFresh: true })
       } else {
         fetchChargers(position.value.lat, position.value.lng)
       }
