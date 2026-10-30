@@ -12,6 +12,7 @@ const roundTripMode = inject('roundTripMode')
 const onlyCCS = inject('onlyCCS')
 const excludeTesla = inject('excludeTesla')
 const maxChargeMinutes = inject('maxChargeMinutes')
+const preferredNavigation = inject('preferredNavigation')
 const minPower = inject('minPower')
 const onlyOnRoute = inject('onlyOnRoute')
 const searchRadius = inject('searchRadius')
@@ -118,7 +119,7 @@ onUnmounted(() => {
           <span class="row-text">
             <span class="row-label">Mode hiver</span>
             <span class="row-sub">
-              {{ winterMode ? `Autonomie ramenée à ${winterPct} % (25 kWh/100 km)` : 'Consommation plus élevée par temps froid' }}
+              {{ winterMode ? `Novembre à mars · autonomie ramenée à ${winterPct} % (25 kWh/100 km)` : 'Désactivé automatiquement dès avril · réglage manuel possible' }}
             </span>
           </span>
           <span class="switch" aria-hidden="true" />
@@ -149,6 +150,21 @@ onUnmounted(() => {
             <option v-for="minutes in [10, 15, 20, 25, 30, 40, 45, 60]" :key="minutes" :value="minutes">
               {{ minutes }} min
             </option>
+          </select>
+        </label>
+      </section>
+
+      <!-- Navigation -->
+      <section class="option-section">
+        <h3 class="section-title">Navigation</h3>
+        <label class="row filter-item">
+          <span class="row-text">
+            <span class="row-label">Ouvrir les itinéraires avec</span>
+            <span class="row-sub">Un seul bouton de navigation affiché sur les bornes</span>
+          </span>
+          <select v-model="preferredNavigation" class="select" aria-label="Application de navigation">
+            <option value="apple">Plans</option>
+            <option value="google">Google Maps</option>
           </select>
         </label>
       </section>
