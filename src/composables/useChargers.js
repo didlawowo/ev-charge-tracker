@@ -3,7 +3,7 @@ import { getRouteGeometry, isPointNearRoute } from './useRoute'
 import { isCCSConnection, haversineDistance, isTeslaCharger, openChargeMapUrl } from '../utils'
 import { useStoredSetting } from './useStoredSetting'
 
-export function useChargers(position, heading, destination) {
+export function useChargers(position, heading, destination, getFreshPosition = null) {
   const chargers = ref([])
   const loading = ref(false)
   const error = ref(null)
@@ -189,44 +189,79 @@ export function useChargers(position, heading, destination) {
   // Même principe pour l'itinéraire : si la destination change pendant le calcul OSRM,
   // l'ancien résultat ne doit pas écraser le nouveau.
   let routeRequestId = 0
+  let lastRouteStart = null
+  let lastRouteRequestedAt = 0
+  let rerouteTimeout = null
+  const ROUTE_RECALC_DISTANCE_M = 1500
+  const ROUTE_RECALC_MIN_INTERVAL_MS = 15000
 
   const clearRoute = () => {
     routeRequestId++
+    clearTimeout(rerouteTimeout)
+    lastRouteStart = null
     routeGeometry.value = null
     routeInfo.value = null
     alternativeRoutes.value = []
     selectedRouteIndex.value = 0
   }
 
-  const fetchRouteToDestination = async (startPos, dest) => {
+  const fetchRouteToDestination = async (startPos, dest, { forceFresh = false } = {}) => {
+    // Invalider IMMÉDIATEMENT les calculs et recherches de bornes précédents :
+    // une réponse arrivée dans le désordre ne doit plus rétablir l'ancien départ.
     const requestId = ++routeRequestId
+    ++chargersRequestId
+    clearTimeout(rerouteTimeout)
     loading.value = true
     error.value = null
 
-    const routes = await getRouteGeometry(startPos.lat, startPos.lng, dest.lat, dest.lng)
-    if (requestId !== routeRequestId) return
+    try {
+      // À chaque demande explicite, demander un nouveau fix non caché.
+      const current = getFreshPosition
+        ? await getFreshPosition({ force: forceFresh })
+        : startPos
+      if (requestId !== routeRequestId) return
+      const routeStart = current || startPos
+      if (!routeStart) throw new Error('Position GPS indisponible pour le départ')
 
-    if (!routes || routes.length === 0) {
+      lastRouteStart = { lat: routeStart.lat, lng: routeStart.lng }
+      lastRouteRequestedAt = Date.now()
+
+      const routes = await getRouteGeometry(routeStart.lat, routeStart.lng, dest.lat, dest.lng)
+      if (requestId !== routeRequestId) return
+      if (!routes || routes.length === 0) throw new Error('Itinéraire introuvable')
+
+      alternativeRoutes.value = routes
+      selectedRouteIndex.value = 0
+      const selected = routes[0]
+      routeGeometry.value = selected.coordinates
+      routeInfo.value = {
+        distance: selected.distance,
+        duration: selected.duration
+      }
+      await fetchChargersAlongRoute(selected.coordinates, routeStart)
+    } catch (e) {
+      if (requestId !== routeRequestId) return
+      // Ne jamais conserver un ancien tracé après un recalcul impossible.
+      alternativeRoutes.value = []
+      routeGeometry.value = null
+      routeInfo.value = null
+      error.value = e.message || 'Position GPS ou itinéraire indisponible'
       loading.value = false
-      error.value = 'Itinéraire introuvable'
-      return
     }
-
-    alternativeRoutes.value = routes
-    selectedRouteIndex.value = 0
-    const selected = routes[0]
-    routeGeometry.value = selected.coordinates
-    routeInfo.value = {
-      distance: selected.distance,
-      duration: selected.duration
-    }
-    await fetchChargersAlongRoute(selected.coordinates, startPos)
   }
 
   const selectRoute = async (index) => {
     if (index < 0 || index >= alternativeRoutes.value.length) return
     const pos = position?.value
     if (!pos) return
+
+    if (lastRouteStart && haversineDistance(
+      lastRouteStart.lat, lastRouteStart.lng, pos.lat, pos.lng
+    ) > ROUTE_RECALC_DISTANCE_M) {
+      // Les alternatives d'un ancien tracé ne sont plus pertinentes en roulant.
+      await fetchRouteToDestination(pos, destination.value, { forceFresh: true })
+      return
+    }
 
     selectedRouteIndex.value = index
     const selected = alternativeRoutes.value[index]
@@ -308,6 +343,19 @@ export function useChargers(position, heading, destination) {
 
     if (destination?.value) {
       syncDestination()
+      // Dès que l'on a avancé d'au moins 1,5 km, recalcul depuis le GPS actuel.
+      // Anti-rebond / throttle évitent d'appeler OSRM à chaque nouvelle position.
+      if (lastRouteStart &&
+        haversineDistance(lastRouteStart.lat, lastRouteStart.lng, newPos.lat, newPos.lng) >= ROUTE_RECALC_DISTANCE_M &&
+        Date.now() - lastRouteRequestedAt >= ROUTE_RECALC_MIN_INTERVAL_MS &&
+        navigator.onLine) {
+        clearTimeout(rerouteTimeout)
+        rerouteTimeout = setTimeout(() => {
+          if (destination?.value) {
+            fetchRouteToDestination(position.value, destination.value, { forceFresh: true })
+          }
+        }, 2000)
+      }
       return
     }
 
@@ -350,12 +398,15 @@ export function useChargers(position, heading, destination) {
   onUnmounted(() => {
     clearTimeout(fetchTimeout)
     clearTimeout(filterTimeout)
+    clearTimeout(rerouteTimeout)
   })
 
   // Réaffiche un trajet enregistré sans appel réseau (voir useOfflineTrip)
   const restoreTrip = ({ routes, selectedRouteIndex: index, chargers: savedChargers, destination: dest }) => {
     routeRequestId++
     chargersRequestId++
+    clearTimeout(rerouteTimeout)
+    lastRouteStart = position?.value ? { lat: position.value.lat, lng: position.value.lng } : null
     clearTimeout(fetchTimeout)
     clearTimeout(filterTimeout)
     // Empêche syncDestination de relancer le calcul quand la destination sera réassignée
