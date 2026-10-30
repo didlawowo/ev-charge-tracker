@@ -5,8 +5,8 @@ import 'leaflet/dist/leaflet.css'
 import {
   isCCSConnection,
   isTeslaCharger,
-  googleMapsUrl,
-  appleMapsUrl,
+  navigationUrl,
+  navigationLabel,
   maxCcsPower,
   formatDistance,
   formatSavedAt,
@@ -16,6 +16,7 @@ import AppIcon from './AppIcon.js'
 import StopsSheet from './StopsSheet.vue'
 
 const position = inject('position')
+const preferredNavigation = inject('preferredNavigation', ref('apple'))
 const chargers = inject('chargers')
 const loading = inject('loading')
 const destination = inject('destination')
@@ -92,8 +93,8 @@ const popupHtml = (charger, stop) => {
   const place = [charger.address, charger.town].filter(Boolean).join(', ')
   const points = charger.numberOfPoints
   // URLs calculées à l'ouverture : la position a pu changer depuis la création du marqueur
-  const gUrl = googleMapsUrl(position.value, charger, destination.value)
-  const aUrl = appleMapsUrl(position.value, charger)
+  const navUrl = navigationUrl(preferredNavigation.value, charger)
+  const navLabel = navigationLabel(preferredNavigation.value)
 
   return `
     <div class="popup">
@@ -114,8 +115,7 @@ const popupHtml = (charger, stop) => {
       ${tags ? `<div class="connections">${tags}</div>` : ''}
       ${charger.usageCost ? `<p class="price">${escapeHtml(charger.usageCost)}</p>` : ''}
       <div class="popup-actions">
-        <a class="popup-btn primary" href="${escapeHtml(gUrl)}" target="_blank" rel="noopener">Google Maps</a>
-        <a class="popup-btn" href="${escapeHtml(aUrl)}" target="_blank" rel="noopener">Plans</a>
+        <a class="popup-btn primary" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener">${navLabel}</a>
       </div>
       <a class="popup-link" href="${escapeHtml(charger.detailsUrl)}" target="_blank" rel="noopener">Fiche OpenChargeMap ↗</a>
     </div>
