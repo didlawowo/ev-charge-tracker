@@ -11,6 +11,8 @@ const props = defineProps({
   isSearching: { type: Boolean, default: false },
   routeInfo: { type: Object, default: null },
   autonomy: { type: Number, default: 100 },
+  totalChargingMinutes: { type: Number, default: 0 },
+  maxChargeMinutes: { type: Number, default: 25 },
   maxAutonomy: { type: Number, default: 470 },
   usableRange: { type: Number, default: 0 },
   loading: { type: Boolean, default: false },
@@ -96,7 +98,7 @@ const tripStatus = computed(() => {
     const unreachable = props.plannedStops.some(s => s.unreachable)
     return {
       kind: unreachable ? 'warn' : 'stops',
-      label: `${n} arrêt${n > 1 ? 's' : ''}${unreachable ? ' · autonomie juste' : ''}`
+      label: `${n} arrêt${n > 1 ? 's' : ''}${unreachable ? ' · trajet non couvert' : ''}`
     }
   }
   if (props.loading) return null
@@ -218,10 +220,13 @@ const autonomyEditorOpen = ref(false)
         </span>
         <span class="route-stat">
           <AppIcon name="clock" :size="16" />
-          {{ formatDuration(roundTripMode ? routeInfo.duration * 2 : routeInfo.duration) }}
+          {{ formatDuration((roundTripMode ? routeInfo.duration * 2 : routeInfo.duration) + totalChargingMinutes * 60) }}
         </span>
         <span v-if="tripStatus" class="trip-badge" :class="tripStatus.kind">{{ tripStatus.label }}</span>
       </div>
+      <p v-if="totalChargingMinutes > 0" class="charge-time-hint">
+        Durée estimée avec ≈ {{ totalChargingMinutes }} min de recharge ({{ maxChargeMinutes }} min max par arrêt).
+      </p>
 
       <!-- Itinéraires alternatifs -->
       <div v-if="alternativeRoutes.length > 1" class="alternative-routes" role="radiogroup" aria-label="Choix de l'itinéraire">
@@ -497,6 +502,12 @@ const autonomyEditorOpen = ref(false)
 
 .route-stat .app-icon {
   color: var(--text-muted);
+}
+
+.charge-time-hint {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 .x2 {
