@@ -300,7 +300,7 @@ test.describe('Planification avec plafond de recharge', () => {
     expect(durations.every(min => Number.isFinite(min) && min > 0 && min <= 25)).toBeTruthy()
     await expect(page.locator('.charge-time-hint')).toContainText('25 min max')
     await expect(page.locator('.maps-note')).toContainText('Google Maps calcule indépendamment')
-    await expect(page.locator('.stop-item')).not.toContainText('Tesla')
+    expect((await page.locator('.stop-item').allTextContents()).every(text => !text.includes('Tesla'))).toBeTruthy()
   })
 
   test('signale un trajet non couvert si la limite devient trop courte', async ({ page }) => {
@@ -340,7 +340,8 @@ test.describe('Double-tap iPhone', () => {
     expect(await page.evaluate(() => window.scrollY)).toBe(0)
     expect(await page.evaluate(() => getComputedStyle(document.body).touchAction)).toBe('manipulation')
 
-    // Sur iOS, pas de bandeau d'installation couvrant le bas de la carte.
+    // Sur iOS, l'ancienne bannière apparaissait après 3 s et cachait les commandes.
+    await page.waitForTimeout(3300)
     await expect(page.locator('.install-banner')).toHaveCount(0)
   })
 })
