@@ -216,7 +216,10 @@ onMounted(() => {
   if (!mapContainer.value) return
 
   map = L.map(mapContainer.value, {
-    zoomControl: false
+    zoomControl: false,
+    // Le double-tap n'est jamais un geste de zoom dans EV Finder :
+    // on conserve uniquement le pinch-to-zoom sur mobile.
+    doubleClickZoom: false
   }).setView([46.603354, 1.888334], 6)
 
   // Seule URL admise par la politique d'usage OSM (les sous-domaines a/b/c peuvent être coupés).
