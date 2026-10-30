@@ -1,7 +1,7 @@
 <script setup>
 import { ref, inject } from 'vue'
 import AppIcon from './AppIcon.js'
-import { googleMapsUrl, maxCcsPower } from '../utils'
+import { navigationUrl, navigationLabel, maxCcsPower } from '../utils'
 
 defineProps({
   stops: { type: Array, required: true }
@@ -9,8 +9,7 @@ defineProps({
 
 const emit = defineEmits(['focus'])
 
-const position = inject('position', ref(null))
-const destination = inject('destination', ref(null))
+const preferredNavigation = inject('preferredNavigation', ref('apple'))
 
 const expanded = ref(true)
 </script>
@@ -55,17 +54,17 @@ const expanded = ref(true)
         </button>
         <a
           class="stop-nav"
-          :href="googleMapsUrl(position, stop, destination)"
+          :href="navigationUrl(preferredNavigation, stop)"
           target="_blank"
           rel="noopener"
-          :aria-label="`Itinéraire Google Maps via ${stop.name}`"
+          :aria-label="`Itinéraire ${navigationLabel(preferredNavigation)} vers ${stop.name}`"
         >
           <AppIcon name="navigation" :size="20" />
         </a>
       </li>
     </ol>
     <p v-if="expanded && stops.length" class="maps-note">
-      Google Maps calcule indépendamment la durée des arrêts. La limite s'applique à EV Finder.
+      L'application de navigation choisie calcule indépendamment l'heure d'arrivée. EV Finder limite les recharges à la durée configurée.
     </p>
   </section>
 </template>
