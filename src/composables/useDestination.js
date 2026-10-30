@@ -1,4 +1,5 @@
 import { ref, onUnmounted } from 'vue'
+import { useRecentDestinations } from './useRecentDestinations'
 
 // Photon API - optimisé pour l'autocomplete (basé sur OSM)
 const PHOTON_API = 'https://photon.komoot.io/api'
@@ -8,6 +9,7 @@ export function useDestination() {
   const destinationQuery = ref('')
   const suggestions = ref([])
   const isSearching = ref(false)
+  const { recentDestinations, rememberDestination, clearRecentDestinations, removeRecentDestination } = useRecentDestinations()
 
   const formatPlaceName = (props) => {
     const parts = []
@@ -46,13 +48,18 @@ export function useDestination() {
   let currentController = null
 
   const searchDestination = async (query) => {
+    // Invalider aussi les anciennes réponses lorsque le champ est vidé.
+    if (currentController) {
+      currentController.abort()
+      currentController = null
+    }
     if (!query || query.length < 2) {
       suggestions.value = []
+      isSearching.value = false
       return
     }
 
     // Annule la requête précédente pour éviter les race conditions
-    if (currentController) currentController.abort()
     currentController = new AbortController()
     const controller = currentController
 
@@ -88,10 +95,13 @@ export function useDestination() {
           type: f.properties.osm_value
         }))
 
+      // Éviter qu'une ancienne recherche écrase une sélection récente.
+      if (currentController !== controller) return
       // Dédupliquer et limiter à 5 résultats
       suggestions.value = deduplicateSuggestions(frenchPlaces).slice(0, 5)
     } catch (e) {
       if (e.name === 'AbortError') return
+      if (currentController !== controller) return
       console.error('Erreur recherche destination:', e)
       suggestions.value = []
     } finally {
@@ -108,6 +118,12 @@ export function useDestination() {
   })
 
   const selectDestination = (place) => {
+    if (currentController) {
+      currentController.abort()
+      currentController = null
+    }
+    isSearching.value = false
+    rememberDestination(place)
     destination.value = {
       lat: place.lat,
       lng: place.lng,
@@ -118,6 +134,11 @@ export function useDestination() {
   }
 
   const clearDestination = () => {
+    if (currentController) {
+      currentController.abort()
+      currentController = null
+    }
+    isSearching.value = false
     destination.value = null
     destinationQuery.value = ''
     suggestions.value = []
@@ -130,6 +151,10 @@ export function useDestination() {
     isSearching,
     searchDestination,
     selectDestination,
-    clearDestination
+    clearDestination,
+    recentDestinations,
+    rememberDestination,
+    clearRecentDestinations,
+    removeRecentDestination
   }
 }
