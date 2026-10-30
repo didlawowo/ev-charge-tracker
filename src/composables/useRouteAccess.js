@@ -27,10 +27,17 @@ export async function verifyChargerRoadAccess(routeCoords, chargers, fetcher = f
 
   // On valide en priorité les stations proches du trajet. Pour un très long
   // trajet, les validations suivantes pourront être faites lors du recalcul.
-  const candidates = chargers.filter(c =>
+  const nearRoute = chargers.filter(c =>
     Number.isFinite(c.lat) && Number.isFinite(c.lng) &&
     isPointNearRoute(c.lat, c.lng, routeCoords, ROUTE_CORRIDOR_M)
-  ).sort((a, b) => a.distance - b.distance).slice(0, MAX_VERIFIED_PER_ROUTE)
+  ).sort((a, b) => a.distance - b.distance)
+  // Échantillonner tout l'itinéraire, plutôt que de ne vérifier que les bornes
+  // les plus proches du départ (sinon les longues distances n'ont plus d'arrêts).
+  const candidates = nearRoute.length <= MAX_VERIFIED_PER_ROUTE
+    ? nearRoute
+    : Array.from({ length: MAX_VERIFIED_PER_ROUTE }, (_, i) =>
+      nearRoute[Math.round(i * (nearRoute.length - 1) / (MAX_VERIFIED_PER_ROUTE - 1))]
+    )
 
   const batchRequest = async batch => {
     const len = batch.length
