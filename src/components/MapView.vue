@@ -109,6 +109,7 @@ const popupHtml = (charger, stop) => {
       ${place ? `<p class="popup-address">${escapeHtml(place)}</p>` : ''}
       <div class="stats">
         <span>${formatDistance(charger.distance)}</span>
+        ${charger.roadAccess === 'unknown' ? '<span class="off">Accès routier non vérifié</span>' : ''}
         ${points ? `<span>${points} point${points > 1 ? 's' : ''} de charge</span>` : ''}
         ${charger.isOperational ? '' : '<span class="off">Hors service</span>'}
       </div>
