@@ -220,3 +220,127 @@ test.describe('Offline trip', () => {
     await expect(page.locator('.status-pill.offline')).toBeVisible()
   })
 })
+
+
+test.describe('Préférences Tesla et recharge', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation(PARIS)
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Options' }).click()
+  })
+
+  test('exclut Tesla par défaut et mémorise la réactivation', async ({ page }) => {
+    const tesla = page.getByRole('switch', { name: /Masquer les Superchargeurs Tesla/ })
+    await expect(tesla).toBeChecked()
+    await tesla.uncheck()
+    await expect(tesla).not.toBeChecked()
+
+    await page.reload()
+    await page.getByRole('button', { name: 'Options' }).click()
+    await expect(page.getByRole('switch', { name: /Masquer les Superchargeurs Tesla/ })).not.toBeChecked()
+  })
+
+  test('limite les recharges à 25 minutes par défaut et mémorise le choix', async ({ page }) => {
+    const duration = page.getByRole('combobox', { name: 'Durée maximale de recharge par arrêt' })
+    await expect(duration).toHaveValue('25')
+    await duration.selectOption('15')
+    await page.reload()
+    await page.getByRole('button', { name: 'Options' }).click()
+    await expect(page.getByRole('combobox', { name: 'Durée maximale de recharge par arrêt' })).toHaveValue('15')
+  })
+})
+
+test.describe('Planification avec plafond de recharge', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation(PARIS)
+    await page.addInitScript(() => {
+      localStorage.setItem('ev-finder:last-trip', JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        destination: { lat: 48.9, lng: 2.3522, name: 'Destination test' },
+        destinationQuery: 'Destination test',
+        selectedRouteIndex: 0,
+        routes: [{
+          id: 0,
+          distance: 322000,
+          duration: 14400,
+          coordinates: [[2.3522, 46], [2.3522, 46.7], [2.3522, 48.3], [2.3522, 48.9]]
+        }],
+        chargers: [
+          {
+            id: 1, name: 'Borne A', operator: 'Ionity',
+            lat: 46.7, lng: 2.3522, distance: 80000, isOperational: true,
+            connections: [{ type: 'CCS', typeId: 33, power: 150 }]
+          },
+          {
+            id: 2, name: 'Borne B', operator: 'Ionity',
+            lat: 48.3, lng: 2.3522, distance: 260000, isOperational: true,
+            connections: [{ type: 'CCS', typeId: 33, power: 150 }]
+          },
+          {
+            id: 3, name: 'Tesla Supercharger', operator: 'Tesla',
+            lat: 46.7, lng: 2.3522, distance: 80000, isOperational: true,
+            connections: [{ type: 'CCS', typeId: 33, power: 250 }]
+          }
+        ]
+      }))
+    })
+    await page.goto('/')
+    await page.locator('.map-container').waitFor()
+    await page.locator('.resume-trip .resume-main').click()
+  })
+
+  test('retient au maximum 25 min par arrêt, sans exploiter Tesla par défaut', async ({ page }) => {
+    await expect(page.locator('.stop-item')).toHaveCount(2)
+    const details = await page.locator('.stop-details').allTextContents()
+    const durations = details.map(text => Number(text.match(/≈\s*(\d+)\s*min/)?.[1]))
+    expect(durations).toHaveLength(2)
+    expect(durations.every(min => Number.isFinite(min) && min > 0 && min <= 25)).toBeTruthy()
+    await expect(page.locator('.charge-time-hint')).toContainText('25 min max')
+    await expect(page.locator('.maps-note')).toContainText('Google Maps calcule indépendamment')
+    await expect(page.locator('.stop-item')).not.toContainText('Tesla')
+  })
+
+  test('signale un trajet non couvert si la limite devient trop courte', async ({ page }) => {
+    await page.getByRole('button', { name: 'Options' }).click()
+    await page.getByRole('combobox', { name: 'Durée maximale de recharge par arrêt' }).selectOption('10')
+    await page.getByRole('button', { name: 'Fermer' }).click()
+    await expect(page.locator('.stop-warning')).toContainText('Trajet non réalisable')
+  })
+})
+
+test.describe('Double-tap iPhone', () => {
+  test.use({
+    viewport: { width: 390, height: 700 },
+    hasTouch: true,
+    isMobile: true,
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/143.0 Mobile/15E148 Safari/605.1.15'
+  })
+
+  test('garde la saisie et la navigation utilisables après deux taps rapprochés', async ({ page, context }) => {
+    await context.grantPermissions(['geolocation'])
+    await context.setGeolocation(PARIS)
+    await page.goto('/')
+    await page.locator('.map-container').waitFor()
+
+    const field = await page.locator('.autonomy-field').boundingBox()
+    const x = field.x + field.width / 2
+    const y = field.y + field.height / 2
+    await page.touchscreen.tap(x, y)
+    await page.touchscreen.tap(x, y)
+    await expect(page.locator('.autonomy-editor')).toBeVisible()
+    await page.locator('.autonomy-input').fill('50')
+    await page.locator('.confirm-btn').tap()
+
+    await expect(page.locator('.autonomy-number')).toHaveText('50')
+    await expect(page.locator('.header')).toBeVisible()
+    await expect(page.locator('.tabs')).toBeVisible()
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    expect(await page.evaluate(() => getComputedStyle(document.body).touchAction)).toBe('manipulation')
+
+    // Sur iOS, pas de bandeau d'installation couvrant le bas de la carte.
+    await expect(page.locator('.install-banner')).toHaveCount(0)
+  })
+})
