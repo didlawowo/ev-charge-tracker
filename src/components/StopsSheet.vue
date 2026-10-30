@@ -48,9 +48,9 @@ const expanded = ref(true)
           <span class="stop-info">
             <strong>{{ stop.name }}</strong>
             <span class="stop-details">
-              Km {{ Math.round(stop.distanceFromStart) }}<template v-if="maxCcsPower(stop)"> · {{ maxCcsPower(stop) }} kW</template> · {{ stop.operator }}
+              Km {{ Math.round(stop.distanceFromStart) }}<template v-if="maxCcsPower(stop)"> · {{ maxCcsPower(stop) }} kW</template> · {{ stop.operator }}<template v-if="!stop.unreachable && stop.chargeMinutes"> · ≈ {{ stop.chargeMinutes }} min</template>
             </span>
-            <span v-if="stop.unreachable" class="stop-warning">Au-delà de l'autonomie restante</span>
+            <span v-if="stop.unreachable" class="stop-warning">Trajet non réalisable avec cette limite de recharge</span>
           </span>
         </button>
         <a
@@ -64,6 +64,9 @@ const expanded = ref(true)
         </a>
       </li>
     </ol>
+    <p v-if="expanded && stops.length" class="maps-note">
+      Google Maps calcule indépendamment la durée des arrêts. La limite s'applique à EV Finder.
+    </p>
   </section>
 </template>
 
@@ -201,6 +204,13 @@ const expanded = ref(true)
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--warning);
+}
+
+.maps-note {
+  padding: 2px 16px 12px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
 }
 
 .stop-nav {
