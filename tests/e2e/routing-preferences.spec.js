@@ -5,6 +5,10 @@ import { verifyChargerRoadAccess } from '../../src/composables/useRouteAccess.js
 
 const PARIS = { latitude: 48.8566, longitude: 2.3522 }
 
+// Le service worker PWA (runtimeCaching NetworkFirst Photon/OSRM) intercepte les fetch :
+// page.route ne les verrait jamais et les requêtes partiraient sur le réseau réel.
+test.use({ serviceWorkers: 'block' })
+
 test('mode hiver du 1er novembre au 31 mars et désactivation le 1er avril', () => {
   expect(getWinterSeason(new Date('2026-10-31T12:00:00')).winter).toBe(false)
   expect(getWinterSeason(new Date('2026-11-01T12:00:00')).winter).toBe(true)
