@@ -142,6 +142,16 @@ test('réutiliser une destination pendant un déplacement recalcule depuis le GP
     })
   })
 
+  // Chromium émulé par Playwright fait expirer getCurrentPosition (maximumAge: 0) alors que
+  // watchPosition reçoit bien les positions : on rend le dernier fix suivi, horodaté maintenant.
+  await page.addInitScript(() => {
+    const geo = navigator.geolocation
+    let last = null
+    geo.watchPosition(p => { last = p.coords }, () => {}, { enableHighAccuracy: true })
+    geo.getCurrentPosition = (ok, ko) => setTimeout(() => (last
+      ? ok({ coords: last, timestamp: Date.now() })
+      : ko({ code: 2, message: 'no fix' })), 300)
+  })
   await page.goto('/')
   await page.locator('.search-input').fill('Lyon')
   await page.locator('.suggestion-item').filter({ hasText: 'Lyon' }).first().click()

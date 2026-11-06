@@ -100,6 +100,8 @@ test.describe('Destination & autonomy', () => {
 
 test.describe('Options menu', () => {
   test.beforeEach(async ({ page, context }) => {
+    // Hors saison hivernale : le mode hiver s'active seul du 1er novembre au 31 mars.
+    await page.clock.setFixedTime(new Date('2026-07-15T12:00:00'))
     await context.grantPermissions(['geolocation'])
     await context.setGeolocation(PARIS)
     await page.goto('/')
@@ -253,6 +255,8 @@ test.describe('Préférences Tesla et recharge', () => {
 
 test.describe('Planification avec plafond de recharge', () => {
   test.beforeEach(async ({ page, context }) => {
+    // Hors saison hivernale : le mode hiver s'active seul du 1er novembre au 31 mars.
+    await page.clock.setFixedTime(new Date('2026-07-15T12:00:00'))
     await context.grantPermissions(['geolocation'])
     await context.setGeolocation(PARIS)
     await page.addInitScript(() => {
