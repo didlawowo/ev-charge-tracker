@@ -5,6 +5,7 @@ import { useChargers } from './composables/useChargers'
 import { useDestination } from './composables/useDestination'
 import { useTripPlanner } from './composables/useTripPlanner'
 import { useOfflineTrip } from './composables/useOfflineTrip'
+import { useStoredSetting } from './composables/useStoredSetting'
 import MapView from './components/MapView.vue'
 import ListView from './components/ListView.vue'
 import OptionsMenu from './components/OptionsMenu.vue'
@@ -16,6 +17,9 @@ import AppIcon from './components/AppIcon.js'
 const initialView = new URLSearchParams(window.location.search).get('view') === 'list' ? 'list' : 'map'
 const activeTab = ref(initialView)
 const optionsOpen = ref(false)
+const preferredNavigation = useStoredSetting('ev-finder:navigation-app', 'apple', value =>
+  ['apple', 'google'].includes(value) ? value : undefined
+)
 const focusStop = ref(null)
 
 // Clic sur un arrêt ou une borne de la liste : basculer sur la carte et la centrer dessus
@@ -36,6 +40,7 @@ const {
   permissionDenied,
   isTracking,
   signalLost,
+  getFreshPosition,
   startTracking
 } = useGeolocation()
 
@@ -46,7 +51,10 @@ const {
   isSearching,
   searchDestination,
   selectDestination,
-  clearDestination
+  clearDestination,
+  recentDestinations,
+  clearRecentDestinations,
+  removeRecentDestination
 } = useDestination()
 
 const {
@@ -66,13 +74,25 @@ const {
   selectRoute,
   restoreTrip,
   refreshChargers
-} = useChargers(position, heading, destination)
+} = useChargers(position, heading, destination, getFreshPosition)
+
+// Un trajet choisi de nouveau doit repartir du GPS actuel, même si la
+// destination est identique à celle qui était déjà sélectionnée.
+const selectDestinationAndRefresh = place => {
+  const previous = destination.value
+  selectDestination(place)
+  if (previous && previous.lat === place.lat && previous.lng === place.lng) {
+    refreshChargers()
+  }
+}
 
 const {
   autonomy,
   maxAutonomy,
   winterMode,
   roundTripMode,
+  maxChargeMinutes,
+  totalChargingMinutes,
   winterFactor,
   currentUsableRange,
   plannedStops,
@@ -133,6 +153,8 @@ provide('plannedStops', plannedStops)
 provide('winterMode', winterMode)
 provide('winterFactor', winterFactor)
 provide('roundTripMode', roundTripMode)
+provide('maxChargeMinutes', maxChargeMinutes)
+provide('preferredNavigation', preferredNavigation)
 provide('alternativeRoutes', alternativeRoutes)
 provide('selectedRouteIndex', selectedRouteIndex)
 provide('refreshChargers', refreshChargers)
@@ -186,6 +208,8 @@ startTracking()
       :destination="destination"
       :destination-query="destinationQuery"
       :suggestions="suggestions"
+      :recent-destinations="recentDestinations"
+      :access-unverified="Boolean(routeGeometry && relevantChargers.some(c => c.roadAccess === 'unknown'))"
       :is-searching="isSearching"
       :route-info="routeInfo"
       :autonomy="autonomy"
@@ -195,12 +219,16 @@ startTracking()
       :round-trip-mode="roundTripMode"
       :round-trip-analysis="roundTripAnalysis"
       :planned-stops="plannedStops"
+      :total-charging-minutes="totalChargingMinutes"
+      :max-charge-minutes="maxChargeMinutes"
       :alternative-routes="alternativeRoutes"
       :selected-route-index="selectedRouteIndex"
       :saved-trip="savedTrip"
       @search="searchDestination"
-      @select="selectDestination"
+      @select="selectDestinationAndRefresh"
       @clear="clearDestination"
+      @clear-history="clearRecentDestinations"
+      @remove-history="removeRecentDestination"
       @update:autonomy="val => autonomy = val"
       @select-route="selectRoute"
       @resume-trip="resumeTrip"

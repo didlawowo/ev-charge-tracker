@@ -11,6 +11,8 @@ const winterFactor = inject('winterFactor')
 const roundTripMode = inject('roundTripMode')
 const onlyCCS = inject('onlyCCS')
 const excludeTesla = inject('excludeTesla')
+const maxChargeMinutes = inject('maxChargeMinutes')
+const preferredNavigation = inject('preferredNavigation')
 const minPower = inject('minPower')
 const onlyOnRoute = inject('onlyOnRoute')
 const searchRadius = inject('searchRadius')
@@ -117,7 +119,7 @@ onUnmounted(() => {
           <span class="row-text">
             <span class="row-label">Mode hiver</span>
             <span class="row-sub">
-              {{ winterMode ? `Autonomie ramenée à ${winterPct} % (25 kWh/100 km)` : 'Consommation plus élevée par temps froid' }}
+              {{ winterMode ? `Novembre à mars · autonomie ramenée à ${winterPct} % (25 kWh/100 km)` : 'Désactivé automatiquement dès avril · réglage manuel possible' }}
             </span>
           </span>
           <span class="switch" aria-hidden="true" />
@@ -138,6 +140,33 @@ onUnmounted(() => {
           </span>
           <span class="switch" aria-hidden="true" />
         </button>
+
+        <label class="row filter-item">
+          <span class="row-text">
+            <span class="row-label">Recharge max. par arrêt</span>
+            <span class="row-sub">25 min par défaut · estimation, selon la borne et la voiture</span>
+          </span>
+          <select v-model.number="maxChargeMinutes" class="select" aria-label="Durée maximale de recharge par arrêt">
+            <option v-for="minutes in [10, 15, 20, 25, 30, 40, 45, 60]" :key="minutes" :value="minutes">
+              {{ minutes }} min
+            </option>
+          </select>
+        </label>
+      </section>
+
+      <!-- Navigation -->
+      <section class="option-section">
+        <h3 class="section-title">Navigation</h3>
+        <label class="row filter-item">
+          <span class="row-text">
+            <span class="row-label">Ouvrir les itinéraires avec</span>
+            <span class="row-sub">Un seul bouton de navigation affiché sur les bornes</span>
+          </span>
+          <select v-model="preferredNavigation" class="select" aria-label="Application de navigation">
+            <option value="apple">Plans</option>
+            <option value="google">Google Maps</option>
+          </select>
+        </label>
       </section>
 
       <!-- Filtres bornes -->
@@ -162,8 +191,8 @@ onUnmounted(() => {
 
         <label class="row filter-item">
           <span class="row-text">
-            <span class="row-label">Masquer Tesla</span>
-            <span class="row-sub">Superchargeurs</span>
+            <span class="row-label">Masquer les Superchargeurs Tesla</span>
+            <span class="row-sub">Activé par défaut</span>
           </span>
           <input v-model="excludeTesla" type="checkbox" role="switch" class="switch-input">
         </label>
@@ -200,6 +229,14 @@ onUnmounted(() => {
             @input="e => searchRadius = parseInt(e.target.value)"
           >
         </div>
+      </section>
+
+      <!-- PWA iOS : conseil dans les réglages, sans bandeau qui cache la carte. -->
+      <section class="option-section">
+        <h3 class="section-title">Installation</h3>
+        <p class="row-sub">
+          Sur iPhone, utilise le menu de partage du navigateur puis « Sur l'écran d'accueil » si cette option est proposée.
+        </p>
       </section>
 
       <!-- Hors-ligne -->

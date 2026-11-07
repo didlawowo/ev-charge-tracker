@@ -14,6 +14,27 @@ const MIN = 10
 // Brouillon en texte : on ne plafonne pas pendant la frappe (sinon « 3 » devient 10 avant « 30 »)
 const draft = ref(String(props.modelValue))
 const inputEl = ref(null)
+let openedAt = 0
+
+// iOS (Firefox/Brave inclus) peut conserver un décalage du viewport après
+// disparition du clavier : recaler l'application une fois l'éditeur fermé.
+const restoreViewport = () => {
+  window.scrollTo(0, 0)
+}
+
+const closeEditor = () => {
+  inputEl.value?.blur()
+  emit('close')
+  window.requestAnimationFrame(restoreViewport)
+  window.setTimeout(restoreViewport, 350)
+}
+
+// Un double-tap sur le bouton d'autonomie peut tomber sur le fond de la
+// modale au deuxième tap. Ne pas refermer immédiatement l'éditeur.
+const onBackdropClick = () => {
+  if (Date.now() - openedAt < 600) return
+  closeEditor()
+}
 
 const clamp = (value) => Math.min(Math.max(value, MIN), props.max)
 
@@ -61,14 +82,15 @@ const selectAll = (e) => {
 const confirm = () => {
   if (draftValue.value === null) return
   emit('update:modelValue', clamp(draftValue.value))
-  emit('close')
+  closeEditor()
 }
 
 const onKeydown = (e) => {
-  if (e.key === 'Escape') emit('close')
+  if (e.key === 'Escape') closeEditor()
 }
 
 onMounted(() => {
+  openedAt = Date.now()
   window.addEventListener('keydown', onKeydown)
   // Au clavier/souris, prêt à taper. Sur tactile on n'ouvre pas le clavier d'office :
   // il masquerait le curseur et les raccourcis.
@@ -84,7 +106,7 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div class="sheet-backdrop" @click="emit('close')">
+    <div class="sheet-backdrop" @click="onBackdropClick">
       <div
         class="sheet autonomy-editor"
         role="dialog"
@@ -95,7 +117,7 @@ onUnmounted(() => {
         <span class="grabber" aria-hidden="true" />
         <div class="sheet-header">
           <h2 id="autonomy-editor-title">Autonomie restante</h2>
-          <button type="button" class="close-btn" aria-label="Annuler" @click="emit('close')">
+          <button type="button" class="close-btn" aria-label="Annuler" @click="closeEditor">
             <AppIcon name="x" :size="20" />
           </button>
         </div>
@@ -169,6 +191,7 @@ onUnmounted(() => {
 
 <style scoped>
 .sheet-backdrop {
+  touch-action: manipulation;
   position: fixed;
   inset: 0;
   z-index: 2000;

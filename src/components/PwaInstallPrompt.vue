@@ -43,14 +43,15 @@ const handleInstall = async () => {
 /* Au-dessus de la barre d'onglets (56px) sans masquer les contrôles de la carte */
 .install-banner {
   position: fixed;
-  left: 12px;
+  left: auto;
   right: 12px;
-  bottom: calc(64px + env(safe-area-inset-bottom));
+  width: min(300px, calc(100vw - 24px));
+  bottom: calc(72px + env(safe-area-inset-bottom));
   z-index: 1500;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 6px 10px 10px;
+  gap: 8px;
+  padding: 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -62,8 +63,8 @@ const handleInstall = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 10px;
   background: var(--primary);
   color: var(--on-primary);

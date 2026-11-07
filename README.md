@@ -134,7 +134,7 @@ projet n'y est pas affilié.
 
 ## Architecture
 
-Voir [`AGENTS.md`](./AGENTS.md) pour le détail : composables, flux de données et
+Voir [`docs/architecture.md`](./docs/architecture.md) pour le détail : composables, flux de données et
 notes d'implémentation de l'algorithme de planification.
 
 ## Contribuer

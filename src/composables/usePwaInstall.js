@@ -99,7 +99,8 @@ export function usePwaInstall() {
   const shouldShowBanner = computed(() => {
     if (isInstalled.value || installDismissed.value) return false
     if (isAndroid.value && deferredPrompt.value) return showInstallBanner.value
-    if (isIOS.value) return showInstallBanner.value
+    // Sur iOS le bandeau masquait les contrôles (Firefox et Brave inclus).
+    // L'aide d'installation est maintenant dans Options, sans overlay.
     return false
   })
 
@@ -112,12 +113,7 @@ export function usePwaInstall() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     window.addEventListener('appinstalled', handleAppInstalled)
 
-    // Pour iOS, afficher la bannière après un délai si pas installé
-    if (isIOS.value && !checkInstalled() && !checkDismissed()) {
-      setTimeout(() => {
-        showInstallBanner.value = true
-      }, 3000)
-    }
+    // Pas de bannière automatique sur iOS : elle recouvrait la navigation.
   })
 
   onUnmounted(() => {

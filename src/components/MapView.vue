@@ -5,8 +5,9 @@ import 'leaflet/dist/leaflet.css'
 import {
   isCCSConnection,
   isTeslaCharger,
-  googleMapsUrl,
-  appleMapsUrl,
+  haversineDistance,
+  navigationUrl,
+  navigationLabel,
   maxCcsPower,
   formatDistance,
   formatSavedAt,
@@ -16,6 +17,7 @@ import AppIcon from './AppIcon.js'
 import StopsSheet from './StopsSheet.vue'
 
 const position = inject('position')
+const preferredNavigation = inject('preferredNavigation', ref('apple'))
 const chargers = inject('chargers')
 const loading = inject('loading')
 const destination = inject('destination')
@@ -44,6 +46,8 @@ let chargerMarkers = {}
 let routeLayer = null
 let routeBounds = null
 let resizeObserver = null
+let followUser = true
+let lastCameraPosition = null
 
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>'
 
@@ -92,8 +96,8 @@ const popupHtml = (charger, stop) => {
   const place = [charger.address, charger.town].filter(Boolean).join(', ')
   const points = charger.numberOfPoints
   // URLs calculées à l'ouverture : la position a pu changer depuis la création du marqueur
-  const gUrl = googleMapsUrl(position.value, charger, destination.value)
-  const aUrl = appleMapsUrl(position.value, charger)
+  const navUrl = navigationUrl(preferredNavigation.value, charger)
+  const navLabel = navigationLabel(preferredNavigation.value)
 
   return `
     <div class="popup">
@@ -108,14 +112,14 @@ const popupHtml = (charger, stop) => {
       ${place ? `<p class="popup-address">${escapeHtml(place)}</p>` : ''}
       <div class="stats">
         <span>${formatDistance(charger.distance)}</span>
+        ${charger.roadAccess === 'unknown' ? '<span class="off">Accès routier non vérifié</span>' : ''}
         ${points ? `<span>${points} point${points > 1 ? 's' : ''} de charge</span>` : ''}
         ${charger.isOperational ? '' : '<span class="off">Hors service</span>'}
       </div>
       ${tags ? `<div class="connections">${tags}</div>` : ''}
       ${charger.usageCost ? `<p class="price">${escapeHtml(charger.usageCost)}</p>` : ''}
       <div class="popup-actions">
-        <a class="popup-btn primary" href="${escapeHtml(gUrl)}" target="_blank" rel="noopener">Google Maps</a>
-        <a class="popup-btn" href="${escapeHtml(aUrl)}" target="_blank" rel="noopener">Plans</a>
+        <a class="popup-btn primary" href="${escapeHtml(navUrl)}" target="_blank" rel="noopener">${navLabel}</a>
       </div>
       <a class="popup-link" href="${escapeHtml(charger.detailsUrl)}" target="_blank" rel="noopener">Fiche OpenChargeMap ↗</a>
     </div>
@@ -181,6 +185,7 @@ const renderDestination = () => {
   } else if (position?.value) {
     // Destination effacée : recentrer sur la position GPS d'origine
     map.setView([position.value.lat, position.value.lng], 13)
+    lastCameraPosition = { lat: position.value.lat, lng: position.value.lng }
   }
 }
 
@@ -216,7 +221,10 @@ onMounted(() => {
   if (!mapContainer.value) return
 
   map = L.map(mapContainer.value, {
-    zoomControl: false
+    zoomControl: false,
+    // Le double-tap n'est jamais un geste de zoom dans EV Finder :
+    // on conserve uniquement le pinch-to-zoom sur mobile.
+    doubleClickZoom: false
   }).setView([46.603354, 1.888334], 6)
 
   // Seule URL admise par la politique d'usage OSM (les sous-domaines a/b/c peuvent être coupés).
@@ -250,6 +258,9 @@ onMounted(() => {
     else if (z < 12) scale = 0.4 + (z - 6) * (0.6 / 6)
     mapContainer.value.style.setProperty('--marker-scale', scale.toFixed(2))
   }
+  // Le conducteur peut déplacer librement la carte. Le bouton de recentrage
+  // réactive le suivi sans lui imposer un pan dès qu'il consulte une borne.
+  map.on('dragstart', () => { followUser = false })
   map.on('zoomend', updateMarkerScale)
   updateMarkerScale()
 
@@ -306,6 +317,16 @@ watch(position, (pos) => {
     userMarker = L.marker([pos.lat, pos.lng], { icon: userIcon, zIndexOffset: 800 }).addTo(map)
     map.setView([pos.lat, pos.lng], 13)
   }
+
+  if (followUser) {
+    const previous = lastCameraPosition
+    const moved = !previous || haversineDistance(previous.lat, previous.lng, pos.lat, pos.lng) > 300
+    const onScreen = map.getBounds().pad(-0.20).contains([pos.lat, pos.lng])
+    if (moved || !onScreen) {
+      map.panTo([pos.lat, pos.lng], { animate: false })
+      lastCameraPosition = { lat: pos.lat, lng: pos.lng }
+    }
+  }
 })
 
 watch([chargers, plannedStops], renderChargers)
@@ -315,6 +336,7 @@ watch(focusStop, async (stop) => {
   if (!map || !stop) return
   // Venant de l'onglet Liste, la carte vient juste d'être réaffichée
   await nextTick()
+  followUser = false
   map.invalidateSize()
   map.setView([stop.lat, stop.lng], 15, { animate: false })
   // Remonter la borne au-dessus du panneau des arrêts
@@ -328,6 +350,8 @@ const onSheetFocus = (stop) => {
 
 const centerOnUser = () => {
   if (map && position.value) {
+    followUser = true
+    lastCameraPosition = { lat: position.value.lat, lng: position.value.lng }
     map.setView([position.value.lat, position.value.lng], 14)
   }
 }
